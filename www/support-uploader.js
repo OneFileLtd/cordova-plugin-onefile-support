@@ -1,10 +1,8 @@
-window.support = function(ticketDescription, ticketNumber, contactDetails, callback) {
+window.support = function(ticketDescription, ticketNumber, contactDetails, success, error) {
 	var args = [
 		ticketDescription,
 		ticketNumber,
 		contactDetails
 	];
-    cordova.exec(callback, function(err) {
-        callback('Nothing to echo.');
-    }, "SupportUpload", "uploadSupport", args);
+    cordova.exec(success, error, "SupportUpload", "uploadSupport", args);
 };
