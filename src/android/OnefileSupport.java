@@ -23,10 +23,13 @@ public class OnefileSupport extends CordovaPlugin {
 	
 	private void uploadSupport(String ticketDescription, String ticketNumber, String contactDetails, CallbackContext callbackContext) {
 		JSONObject retObj = new JSONObject();
-		retObj.put("ticketDescription", ticketDescription);
-		retObj.put("ticketNumber", ticketNumber);
-		retObj.put("contactDetails", contactDetails);
-		callbackContext.success(retObj);
-		
+		try {
+			retObj.put("ticketDescription", ticketDescription);
+			retObj.put("ticketNumber", ticketNumber);
+			retObj.put("contactDetails", contactDetails);
+			callbackContext.success(retObj);
+		} catch (JSONException e) {
+			callbackContext.error();
+		} 
 	}
 }
