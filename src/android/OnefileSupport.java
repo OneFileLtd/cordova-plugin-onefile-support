@@ -8,10 +8,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class OnefileSupport extends CordovaPlugin {
-	@Override
-	public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-		super.initialize(cordova, webView);
-	}
 	
 	@Override
 	public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
