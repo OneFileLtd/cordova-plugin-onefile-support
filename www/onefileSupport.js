@@ -4,5 +4,5 @@ window.support = function(ticketDescription, ticketNumber, contactDetails, succe
 		ticketNumber,
 		contactDetails
 	];
-    cordova.exec(success, error, "SupportUpload", "uploadSupport", args);
+    cordova.exec(success, error, "OnefileSupport", "onefileSupport", args);
 };

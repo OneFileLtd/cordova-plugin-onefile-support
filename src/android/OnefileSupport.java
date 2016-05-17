@@ -11,7 +11,7 @@ public class OnefileSupport extends CordovaPlugin {
 	
 	@Override
 	public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-		if (action.equals("SupportUpload")) {
+		if (action.equals("onefileSupport")) {
 			if (args.length() != 3) {
 				callbackContext.error("Expected 3 arguments");
 			}
