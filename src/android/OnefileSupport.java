@@ -29,7 +29,7 @@ public class OnefileSupport extends CordovaPlugin {
 			retObj.put("contactDetails", contactDetails);
 			callbackContext.success(retObj);
 		} catch (JSONException e) {
-			callbackContext.error();
+			callbackContext.error("error");
 		} 
 	}
 }
