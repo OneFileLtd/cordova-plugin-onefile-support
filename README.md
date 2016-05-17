@@ -1,0 +1,1 @@
+"# cordova-plugin-onefile-support" 
