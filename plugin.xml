@@ -41,6 +41,7 @@
 			</feature>
         </config-file>
         <source-file src="src/android/OnefileSupport.java" target-dir="src/uk/co/onefile/nomadionic/support/" />
+		<source-file src="src/android/MultipartUtility.java" target-dir="src/uk/co/onefile/nomadionic/support/" />
     </platform>
 
 </plugin>
