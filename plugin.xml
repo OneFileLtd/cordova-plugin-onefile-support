@@ -37,7 +37,7 @@
 	<platform name="android">
         <config-file target="config.xml" parent="/*">
 			<feature name="OnefileSupport">
-				<param name="android-package" value="uk.co.onefile.nomadionic.support"/>
+				<param name="android-package" value="uk.co.onefile.nomadionic.support.OnefileSupport"/>
 			</feature>
         </config-file>
         <source-file src="src/android/OnefileSupport.java" target-dir="src/uk/co/onefile/nomadionic/support/" />
