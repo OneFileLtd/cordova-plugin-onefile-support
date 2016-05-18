@@ -37,14 +37,13 @@ public class MultipartUtility {
         this.charset = charset;
 
         // creates a unique boundary based on time stamp
-        boundary = "===" + System.currentTimeMillis() + "===";
+        boundary = "++++" + System.currentTimeMillis() + "++++";
         URL url = new URL(requestURL);
         httpConn = (HttpURLConnection) url.openConnection();
         httpConn.setUseCaches(false);
         httpConn.setDoOutput(true);    // indicates POST method
         httpConn.setDoInput(true);
-        httpConn.setRequestProperty("Content-Type",
-                "multipart/form-data; boundary=" + boundary);
+        httpConn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         for (Map.Entry<String, String> header : headers.entrySet()) {
             httpConn.setRequestProperty(header.getKey(), header.getValue());
         }
