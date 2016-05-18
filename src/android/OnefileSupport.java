@@ -40,7 +40,7 @@ public class OnefileSupport extends CordovaPlugin {
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
 			String endpoint = config.getString("endpoint");
-			HashMap<String, String> headers = new HashMap<>();
+			HashMap<String, String> headers = new HashMap<String, String>();
 			headers.put("X-SessionID", sessionToken);
 			
 			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
