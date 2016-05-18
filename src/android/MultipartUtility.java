@@ -12,7 +12,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MultipartUtility {
     private final String boundary;
@@ -30,7 +32,7 @@ public class MultipartUtility {
      * @param charset
      * @throws IOException
      */
-    public MultipartUtility(String requestURL, String charset)
+    public MultipartUtility(String requestURL, String charset, HashMap<String, String> headers)
             throws IOException {
         this.charset = charset;
 
@@ -43,6 +45,10 @@ public class MultipartUtility {
         httpConn.setDoInput(true);
         httpConn.setRequestProperty("Content-Type",
                 "multipart/form-data; boundary=" + boundary);
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            httpConn.setRequestProperty(header.getKey(), header.getValue());
+        }
+
         outputStream = httpConn.getOutputStream();
         writer = new PrintWriter(new OutputStreamWriter(outputStream, charset),
                 true);
@@ -107,7 +113,8 @@ public class MultipartUtility {
      * @param value - value of the header field
      */
     public void addHeaderField(String name, String value) {
-        httpConn.setRequestProperty(name, value);
+        writer.append(name + ": " + value).append(LINE_FEED);
+        writer.flush();
     }
 
     /**

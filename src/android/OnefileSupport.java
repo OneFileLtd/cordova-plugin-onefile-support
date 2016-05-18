@@ -11,6 +11,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.HashMap;
 
 public class OnefileSupport extends CordovaPlugin {
 	
@@ -39,16 +40,15 @@ public class OnefileSupport extends CordovaPlugin {
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
 			String endpoint = config.getString("endpoint");
+			HashMap<String, String> headers = new HashMap<>();
+			headers.put("X-SessionID", sessionToken);
 			
-			
-			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8");
+			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
 
 			multipart.addFormField("TicketDescription", ticketDescription);
 			multipart.addFormField("TicketNumber", ticketNumber);
 			multipart.addFormField("ContactDetails", contactDetails);
 			multipart.addFormField("TicketDescription", ticketDescription);
-			multipart.addHeaderField("X-SessionID", sessionToken);
-
 			multipart.addFilePart("File", this.cordova.getActivity().getDatabasePath(files.getString(0)));
 
 			multipart.finish();
