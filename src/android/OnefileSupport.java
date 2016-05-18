@@ -55,9 +55,9 @@ public class OnefileSupport extends CordovaPlugin {
 			callbackContext.success("success");
 
 		} catch (JSONException e) {
-			callbackContext.error("error");
+			callbackContext.error(e.getMessage());
 		} catch (IOException e) {
-			callbackContext.error("error");
+			callbackContext.error(e.getMessage());
 		}
 	}
 }
