@@ -1,16 +1,16 @@
 package uk.co.onefile.nomadionic.support;
 
-import org.apache.cordova.CordovaWebView;
-import org.apache.cordova.CordovaPlugin;
+import android.util.Log;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
-
+import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import android.util.Log;
 
-import java.net.HttpURLConnection;
+import java.io.IOException;
 
 public class OnefileSupport extends CordovaPlugin {
 	
@@ -25,49 +25,39 @@ public class OnefileSupport extends CordovaPlugin {
 		Log.i("OneFileSupportPlugin", "Im in here!");
 		if (action.equals("onefileSupport")) {
 			JSONObject config = args.getJSONObject(0);
+			uploadSupport(config, callbackContext);
+			return true;
+		}
+		return false;
+	}
+	
+	private void uploadSupport(JSONObject config, CallbackContext callbackContext) {
+		try {
 			String ticketDescription = config.getString("ticketDescription");
 			String ticketNumber = config.getString("ticketNumber");
 			String contactDetails = config.getString("contactDetails");
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
 			String endpoint = config.getString("endpoint");
-			callbackContext.success(config);
-			//this.uploadSupport(args.getString(0), args.getString(1), args.getString(2), callbackContext);
-			return true;
-		}
-		return false;
-	}
-	
-	private void uploadSupport(String requestURL, , CallbackContext callbackContext) {
-		JSONObject retObj = new JSONObject();
-		try {
-			retObj.put("ticketDescription", ticketDescription);
-			retObj.put("ticketNumber", ticketNumber);
-			retObj.put("contactDetails", contactDetails);
-			callbackContext.success(retObj);
 			
 			
-			/*MultipartUtility multipart = new MultipartUtility(requestURL, "UTF-8");
+			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8");
 
-			for (int i = 0; i < myFormDataArray.size(); i++) {
-				multipart.addFormField(myFormDataArray.get(i).getParamName(),
-						myFormDataArray.get(i).getParamValue());
-			}
+			multipart.addFormField("TicketDescription", ticketDescription);
+			multipart.addFormField("TicketNumber", ticketNumber);
+			multipart.addFormField("ContactDetails", contactDetails);
+			multipart.addFormField("TicketDescription", ticketDescription);
+			multipart.addHeaderField("X-SessionID", sessionToken);
 
-			
-			for (int i = 0; i < myFileArray.size(); i++) {
-				multipart.addFilePart(myFileArray.getParamName(),
-						new File(myFileArray.getFileName()));
-			}
+			multipart.addFilePart("File", this.cordova.getActivity().getDatabasePath(files.getString(0)));
 
-			List<String> response = multipart.finish();
-			Debug.e(TAG, "SERVER REPLIED:");
-			for (String line : response) {
-				responseString = line;
-			}*/
-			
+			multipart.finish();
+			callbackContext.success("success");
+
 		} catch (JSONException e) {
 			callbackContext.error("error");
-		} 
+		} catch (IOException e) {
+			callbackContext.error("error");
+		}
 	}
 }
