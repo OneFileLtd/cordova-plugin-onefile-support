@@ -1,5 +1,6 @@
 package uk.co.onefile.nomadionic.support;
 
+import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 
@@ -11,11 +12,20 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class OnefileSupport extends CordovaPlugin {
-	
+	private static final int BUFFER = 2048;
+
 	@Override
 	public void initialize(CordovaInterface cordova, CordovaWebView webView) {
 		super.initialize(cordova, webView);
@@ -34,21 +44,23 @@ public class OnefileSupport extends CordovaPlugin {
 	}
 	
 	private void uploadSupport(JSONObject config, CallbackContext callbackContext) {
+		File zipFile = null;
 		try {
 			String ticketDescription = config.getString("ticketDescription");
 			String ticketNumber = "";
-			if(!config.isNull("ticketNumber")) {
-				ticketNumber = config.getString("ticketNumber");
-			}
 			String contactDetails = config.getString("contactDetails");
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
 			String endpoint = config.getString("endpoint");
 			String device = config.getString("device");
 			HashMap<String, String> headers = new HashMap<String, String>();
-			headers.put("X-SessionID", sessionToken);
-			
+			Context context = this.cordova.getActivity().getApplicationContext();
 			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
+
+			if(!config.isNull("ticketNumber")) {
+				ticketNumber = config.getString("ticketNumber");
+			}
+			headers.put("X-SessionID", sessionToken);
 
 			device += "\nDevice: " + Build.DEVICE;
 			device += "\nManufacturer: " + Build.MANUFACTURER;
@@ -59,15 +71,52 @@ public class OnefileSupport extends CordovaPlugin {
 			multipart.addFormField("TicketDescription", ticketDescription);
 			multipart.addFormField("TicketID", ticketNumber);
 			multipart.addFormField("ContactDetails", contactDetails);
-			multipart.addFilePart("File", this.cordova.getActivity().getDatabasePath(files.getString(0)));
 
-			multipart.finish();
-			callbackContext.success("success");
+			zipFile = File.createTempFile("tmpSupportUpload", "zip", context.getCacheDir());
+
+			try {
+				createDatabaseZipFile(files, zipFile);
+			} catch (Exception e) {
+				callbackContext.error(e.getMessage());
+			}
+			multipart.addFilePart("File", zipFile);
+
+			List<String> finish = multipart.finish();
+
+			callbackContext.success(new JSONArray(finish));
 
 		} catch (JSONException e) {
 			callbackContext.error(e.getMessage());
 		} catch (IOException e) {
 			callbackContext.error(e.getMessage());
 		}
+		finally {
+			if (zipFile != null) {
+				zipFile.delete();
+			}
+		}
+	}
+
+	private void createDatabaseZipFile(JSONArray files, File zipFile) throws Exception {
+		BufferedInputStream origin = null;
+		FileOutputStream dest = new FileOutputStream(zipFile);
+
+		ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
+
+		byte data[] = new byte[BUFFER];
+
+		for(int i=0; i < files.length(); i++) {
+			FileInputStream fi = new FileInputStream(this.cordova.getActivity().getDatabasePath(files.getString(0)));
+			origin = new BufferedInputStream(fi, BUFFER);
+			ZipEntry entry = new ZipEntry(files.getString(i).substring(files.getString(i).lastIndexOf("/") + 1));
+			out.putNextEntry(entry);
+			int count;
+			while ((count = origin.read(data, 0, BUFFER)) != -1) {
+				out.write(data, 0, count);
+			}
+			origin.close();
+		}
+
+		out.close();
 	}
 }
