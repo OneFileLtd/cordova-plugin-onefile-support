@@ -33,11 +33,15 @@ public class OnefileSupport extends CordovaPlugin {
 	}
 
 	@Override
-	public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
+	public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
 		Log.i("OneFileSupportPlugin", "Im in here!");
 		if (action.equals("onefileSupport")) {
-			JSONObject config = args.getJSONObject(0);
-			uploadSupport(config, callbackContext);
+			final JSONObject config = args.getJSONObject(0);
+			cordova.getThreadPool().execute(new Runnable() {
+				public void run() {
+					uploadSupport(config, callbackContext);
+				}
+			});
 			return true;
 		}
 		return false;
