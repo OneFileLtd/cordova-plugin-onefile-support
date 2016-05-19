@@ -53,7 +53,7 @@ public class OnefileSupport extends CordovaPlugin {
 			device += "\nDevice: " + Build.DEVICE;
 			device += "\nManufacturer: " + Build.MANUFACTURER;
 			device += "\nModel: " + Build.MODEL;
-			device += "\nAndroid OS Version: " + Build.VERSION.RELEASE + ", Codename: " + Build.VERSION.CODENAME;
+			device += "\nAndroid OS Version: " + Build.VERSION.RELEASE;
 
 			multipart.addFormField("Device", device);
 			multipart.addFormField("TicketDescription", ticketDescription);
