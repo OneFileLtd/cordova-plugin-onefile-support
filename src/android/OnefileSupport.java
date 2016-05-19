@@ -1,27 +1,27 @@
 package uk.co.onefile.nomadionic.support;
 
-import android.content.Context;
-import android.os.Build;
-import android.util.Log;
+		import android.content.Context;
+		import android.os.Build;
+		import android.util.Log;
 
-import org.apache.cordova.CallbackContext;
-import org.apache.cordova.CordovaInterface;
-import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaWebView;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+		import org.apache.cordova.CallbackContext;
+		import org.apache.cordova.CordovaInterface;
+		import org.apache.cordova.CordovaPlugin;
+		import org.apache.cordova.CordovaWebView;
+		import org.json.JSONArray;
+		import org.json.JSONException;
+		import org.json.JSONObject;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+		import java.io.BufferedInputStream;
+		import java.io.BufferedOutputStream;
+		import java.io.File;
+		import java.io.FileInputStream;
+		import java.io.FileOutputStream;
+		import java.io.IOException;
+		import java.util.HashMap;
+		import java.util.List;
+		import java.util.zip.ZipEntry;
+		import java.util.zip.ZipOutputStream;
 
 public class OnefileSupport extends CordovaPlugin {
 	private static final int BUFFER = 2048;
@@ -31,7 +31,7 @@ public class OnefileSupport extends CordovaPlugin {
 		super.initialize(cordova, webView);
 		// your init code here
 	}
-	
+
 	@Override
 	public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
 		Log.i("OneFileSupportPlugin", "Im in here!");
@@ -42,7 +42,7 @@ public class OnefileSupport extends CordovaPlugin {
 		}
 		return false;
 	}
-	
+
 	private void uploadSupport(JSONObject config, CallbackContext callbackContext) {
 		File zipFile = null;
 		try {
@@ -55,12 +55,14 @@ public class OnefileSupport extends CordovaPlugin {
 			String device = config.getString("device");
 			HashMap<String, String> headers = new HashMap<String, String>();
 			Context context = this.cordova.getActivity().getApplicationContext();
+			headers.put("X-SessionID", sessionToken);
+			
 			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
 
 			if(!config.isNull("ticketNumber")) {
 				ticketNumber = config.getString("ticketNumber");
 			}
-			headers.put("X-SessionID", sessionToken);
+			
 
 			device += "\nDevice: " + Build.DEVICE;
 			device += "\nManufacturer: " + Build.MANUFACTURER;
