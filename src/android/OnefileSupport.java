@@ -36,7 +36,10 @@ public class OnefileSupport extends CordovaPlugin {
 	private void uploadSupport(JSONObject config, CallbackContext callbackContext) {
 		try {
 			String ticketDescription = config.getString("ticketDescription");
-			String ticketNumber = config.getString("ticketNumber");
+			String ticketNumber = "";
+			if(config.isNull("ticketNumber")) {
+				ticketNumber = config.getString("ticketNumber");
+			}
 			String contactDetails = config.getString("contactDetails");
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
