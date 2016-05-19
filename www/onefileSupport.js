@@ -1,24 +1,31 @@
 window.support = function(config, success, error) {
 	if (!config.ticketDescription) {
 		error('Missing ticket description');
+		return;
 	}
 	if (!config.contactDetails) {
 		error('Missing contact details');
-	}
-	if (!config.ticketNumber) {
-		error('Missing ticket number');
+		return;
 	}
 	if (!config.sessionToken) {
 		error('Missing session token');
+		return;
 	}
 	if (!config.endpoint) {
 		error('Missing endpoint');
+		return;
+	}
+	if (!config.device) {
+		error('Missing device info');
+		return;
 	}
 	if (!config.files) {
 		error('Missing files');
+		return;
 	}
 	if (config.files && config.files.length === 0) {
 		error('Missing files');
+		return;
 	}
     cordova.exec(success, error, "OnefileSupport", "onefileSupport", [config]);
 };

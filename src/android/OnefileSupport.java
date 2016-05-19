@@ -1,5 +1,6 @@
 package uk.co.onefile.nomadionic.support;
 
+import android.os.Build;
 import android.util.Log;
 
 import org.apache.cordova.CallbackContext;
@@ -40,15 +41,21 @@ public class OnefileSupport extends CordovaPlugin {
 			JSONArray files = config.getJSONArray("files");
 			String sessionToken = config.getString("sessionToken");
 			String endpoint = config.getString("endpoint");
+			String device = config.getString("device");
 			HashMap<String, String> headers = new HashMap<String, String>();
 			headers.put("X-SessionID", sessionToken);
 			
 			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
 
+			device += "\nDevice: " + Build.DEVICE;
+			device += "\nManufacturer: " + Build.MANUFACTURER;
+			device += "\nModel: " + Build.MODEL;
+			device += "\nAndroid OS Version: " + Build.VERSION.RELEASE + ", Codename: " + Build.VERSION.CODENAME;
+
+			multipart.addFormField("Device", device);
 			multipart.addFormField("TicketDescription", ticketDescription);
-			multipart.addFormField("TicketNumber", ticketNumber);
+			multipart.addFormField("TicketID", ticketNumber);
 			multipart.addFormField("ContactDetails", contactDetails);
-			multipart.addFormField("TicketDescription", ticketDescription);
 			multipart.addFilePart("File", this.cordova.getActivity().getDatabasePath(files.getString(0)));
 
 			multipart.finish();
