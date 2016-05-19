@@ -56,13 +56,13 @@ public class OnefileSupport extends CordovaPlugin {
 			HashMap<String, String> headers = new HashMap<String, String>();
 			Context context = this.cordova.getActivity().getApplicationContext();
 			headers.put("X-SessionID", sessionToken);
-			
+
 			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
 
 			if(!config.isNull("ticketNumber")) {
 				ticketNumber = config.getString("ticketNumber");
 			}
-			
+
 
 			device += "\nDevice: " + Build.DEVICE;
 			device += "\nManufacturer: " + Build.MANUFACTURER;
@@ -108,7 +108,7 @@ public class OnefileSupport extends CordovaPlugin {
 		byte data[] = new byte[BUFFER];
 
 		for(int i=0; i < files.length(); i++) {
-			FileInputStream fi = new FileInputStream(this.cordova.getActivity().getDatabasePath(files.getString(0)));
+			FileInputStream fi = new FileInputStream(this.cordova.getActivity().getDatabasePath(files.getString(i)));
 			origin = new BufferedInputStream(fi, BUFFER);
 			ZipEntry entry = new ZipEntry(files.getString(i).substring(files.getString(i).lastIndexOf("/") + 1));
 			out.putNextEntry(entry);
