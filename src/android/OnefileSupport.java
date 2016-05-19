@@ -37,7 +37,7 @@ public class OnefileSupport extends CordovaPlugin {
 		try {
 			String ticketDescription = config.getString("ticketDescription");
 			String ticketNumber = "";
-			if(config.isNull("ticketNumber")) {
+			if(!config.isNull("ticketNumber")) {
 				ticketNumber = config.getString("ticketNumber");
 			}
 			String contactDetails = config.getString("contactDetails");
