@@ -2,7 +2,7 @@ cordova.define("cordova-plugin-onefile-support.onefileSupport", function(require
 var exec = require('cordova/exec');
 var Support = function () {};
 
-Support.prototype.support = function (config, success, error) {
+Support.prototype.sendSupport = function (config, success, error) {
 	if (!config.ticketDescription) {
 		error('Missing ticket description');
 		return;
