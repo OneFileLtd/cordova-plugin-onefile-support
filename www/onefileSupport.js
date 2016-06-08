@@ -1,4 +1,8 @@
-window.support = function(config, success, error) {
+cordova.define("cordova-plugin-onefile-support.onefileSupport", function(require, exports, module) {
+var exec = require('cordova/exec');
+var Support = function () {};
+
+Support.prototype.support = function (config, success, error) {
 	if (!config.ticketDescription) {
 		error('Missing ticket description');
 		return;
@@ -27,5 +31,8 @@ window.support = function(config, success, error) {
 		error('Missing files');
 		return;
 	}
-    cordova.exec(success, error, "OnefileSupport", "onefileSupport", [config]);
+	exec(success, error, "OnefileSupport", "onefileSupport", [config]);
 };
+
+module.exports = new Support();
+});

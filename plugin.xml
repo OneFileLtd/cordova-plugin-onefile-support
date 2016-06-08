@@ -28,8 +28,8 @@
     <repo>https://github.com/ben3005/cordova-plugin-onefile-support.git</repo>
     <issue></issue>
 
-    <js-module src="www/onefileSupport.js" name="onefileSupport">
-        <clobbers target="onefileSupport" />
+    <js-module src="www/onefileSupport.js" name="OnefileSupport">
+        <clobbers target="OnefileSupport" />
     </js-module>
 
     <!-- ios -->
