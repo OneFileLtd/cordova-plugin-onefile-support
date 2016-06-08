@@ -1,4 +1,3 @@
-cordova.define("cordova-plugin-onefile-support.onefileSupport", function(require, exports, module) {
 var exec = require('cordova/exec');
 var Support = function () {};
 
@@ -35,4 +34,3 @@ Support.prototype.sendSupport = function (config, success, error) {
 };
 
 module.exports = new Support();
-});
