@@ -24,7 +24,7 @@
     <name>OneFile Support Uploader</name>
     <description>Cordova Plugin OneFile Support</description>
     <license>Onefile Limited</license>
-    <keywords>nomad,onefile,audio,recorder</keywords>
+    <keywords>nomad,onefile,support</keywords>
     <repo>https://github.com/ben3005/cordova-plugin-onefile-support.git</repo>
     <issue></issue>
 
@@ -32,7 +32,12 @@
         <clobbers target="OnefileSupport" />
     </js-module>
 
-    <!-- ios -->
+    <platform name="windows">
+        <js-module src="src/windows/OnefileSupport.js" name="OnefileSupportProxy">
+            <merges target="" />
+        </js-module>
+		<framework src="src/windows/ZipHelper.winmd" custom="true"/>
+	</platform>
     
 	<platform name="android">
         <config-file target="config.xml" parent="/*">
