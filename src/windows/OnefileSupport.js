@@ -1,7 +1,7 @@
 (function () {
     "use strict";
 	var OnefileSupportProxy = {
-		raiseSupport: function (win, fail, args, env) {
+		onefileSupport: function (win, fail, args, env) {
 			try {
 				if (!args[0]) {
 					fail("Missing options");
