@@ -49,4 +49,14 @@
 		<source-file src="src/android/MultipartUtility.java" target-dir="src/uk/co/onefile/nomadionic/support/" />
     </platform>
 
+	<!-- ios -->
+	<platform name="ios">
+		<config-file target="config.xml" parent="/*">
+			<feature name="OnefileSupport">
+				<param name="ios-package" value="OnefileSupport" />
+			</feature>
+		</config-file>
+		<header-file src="src/ios/OnefileSupport.h" />
+		<source-file src="src/ios/OnefileSupport.m" />
+	</platform>
 </plugin>
