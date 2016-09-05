@@ -149,19 +149,23 @@ typedef enum {
     NSMutableArray *filePaths = [[NSMutableArray alloc] init];
     if([self.paths count] > 0) {
         NSLog(@"%@", filePaths);
-        BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
-        if(success) {
-            ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
-            NSString *basePath = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,  NSUserDomainMask, YES) lastObject];
-
-            NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:basePath usingResourceFork:NO];
-            if(result > 0)
-                [self uploadSupport];
-            else
-                [self pluginError:@"error during compression!! "];
-        } else {
-            [self pluginError:@"error deleting temporary file!! "];
+        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
+        if(fileExists) {
+            BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
+            if(!success)
+            {
+                [self pluginError:@"error deleting temporary file!! "];
+                return;
+            }
         }
+        ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
+        NSString *basePath = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,  NSUserDomainMask, YES) lastObject];
+
+        NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:basePath usingResourceFork:NO];
+        if(result > 0)
+            [self uploadSupport];
+        else
+            [self pluginError:@"error during compression!! "];
     }
     else {
         [self pluginError:@"no databases found!! "];
