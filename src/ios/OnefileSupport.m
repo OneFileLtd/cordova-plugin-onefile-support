@@ -82,7 +82,7 @@ typedef enum {
     }
 
     self.ticketDescription = [self.options objectForKey:@"ticketDescription"];
-    self.ticketNumber = [self.options objectForKey:@"ticketID"];
+    self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
     self.contactDetails = [self.options objectForKey:@"contactDetails"];
     self.sessionToken = [self.options objectForKey:@"sessionToken"];
     self.endpoint = [self.options objectForKey:@"endpoint"];
@@ -182,7 +182,6 @@ typedef enum {
     NSString *charSet = @"UTF-8";
     NSURL *url = [NSURL URLWithString:self.endpoint];
     NSString *boundary = [NSString stringWithFormat: @"++++%9.0f++++", [NSDate timeIntervalSinceReferenceDate]];
-
     NSMutableData *body = [NSMutableData data];
     [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"Device\"\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
