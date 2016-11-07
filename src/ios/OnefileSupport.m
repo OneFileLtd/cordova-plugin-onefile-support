@@ -1,8 +1,15 @@
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#include <mach/vm_statistics.h>
+
 #import "ZKDefs.h"
 #import "ZKDataArchive.h"
 #import "ZKFileArchive.h"
 
 #import "OnefileSupport.h"
+
+#define GIGABYTE                                ((uint64_t)1073741824)
+#define GIGABYTE_1000                           ((uint64_t)1000000000)
 
 typedef enum {
     SUPPORT_ERROR = 0,
@@ -42,6 +49,9 @@ typedef enum {
 @property (nonatomic, retain) NSString *zipPath;
 @property (nonatomic, retain) NSArray *files;
 @property (nonatomic, retain) NSMutableArray *paths;
+
+-(uint64_t)getFreeDiskspace;
+-(uint64_t)getDiskspace;
 @end
 
 @implementation OnefileSupport
@@ -81,17 +91,96 @@ typedef enum {
         self.options = [NSDictionary dictionary];
     }
 
+    // Addition device information.
+    uint64_t free = [self getFreeDiskspace];
+    Float64 freeFloat = ((Float64)free / GIGABYTE);
+    uint64_t space = [self getDiskspace];
+    Float64 spaceFloat = ((Float64)space / GIGABYTE);
+
+    NSString *model = [UIDevice currentDevice].model;
+    // NSString *systemName = [UIDevice currentDevice].systemName;
+    NSString *systemVersion = [UIDevice currentDevice].systemVersion;
+    NSString *versionNumber = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
+    NSString *buildNumber = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"];
+    NSString *actualDiskSpace = [NSString stringWithFormat:@"%5.2f", (Float64)spaceFloat];
+    NSString *freeDiskSpace = [NSString stringWithFormat:@"%5.2f", (Float64)freeFloat];
+    NSString *freeMemory = [NSString stringWithFormat:@"%llu", (uint64_t)(logMemUsage)];
     self.ticketDescription = [self.options objectForKey:@"ticketDescription"];
     self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
     self.contactDetails = [self.options objectForKey:@"contactDetails"];
     self.sessionToken = [self.options objectForKey:@"sessionToken"];
     self.endpoint = [self.options objectForKey:@"endpoint"];
-    self.device = [self.options objectForKey:@"device"];
+    NSString *deviceJS = [self.options objectForKey:@"device"];
     self.files = [self.options objectForKey:@"files"];
+
+    self.device = [NSString stringWithFormat:@"%@\n\nModel: %@\nSystem Version: %@\nVersion Number: %@\nBuild Number: %@\nActual Disk Space: %@\nFree Disk Space: %@\nFree Memory: %@",
+                   deviceJS, model, systemVersion, versionNumber, buildNumber, actualDiskSpace, freeDiskSpace, freeMemory];
+
     if(!self.ticketNumber)
         self.ticketNumber = @"";
     [self fetchDatabasePaths];
     [self zipFiles];
+}
+
+static long prevMemUsage = 0;
+static long curMemUsage = 0;
+static long memUsageDiff = 0;
+
+vm_size_t usedMemory(void) {
+    struct task_basic_info info;
+    mach_msg_type_number_t size = sizeof(info);
+    kern_return_t kerr = task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &size);
+    return (kerr == KERN_SUCCESS) ? info.resident_size : 0; // size in bytes
+}
+
+vm_size_t freeMemory(void) {
+    mach_port_t host_port = mach_host_self();
+    mach_msg_type_number_t host_size = sizeof(vm_statistics_data_t) / sizeof(integer_t);
+    vm_size_t pagesize;
+    vm_statistics_data_t vm_stat;
+
+    host_page_size(host_port, &pagesize);
+    (void) host_statistics(host_port, HOST_VM_INFO, (host_info_t)&vm_stat, &host_size);
+    return vm_stat.free_count * pagesize;
+}
+
+uint64_t logMemUsage(void) {
+    // compute memory usage and log if different by >= 100k
+    curMemUsage = usedMemory();
+    memUsageDiff = curMemUsage - prevMemUsage;
+
+    if (memUsageDiff > 100000 || memUsageDiff < -100000) {
+        prevMemUsage = curMemUsage;
+    }
+    return curMemUsage;
+}
+
+-(uint64_t)getFreeDiskspace
+{
+    uint64_t totalFreeSpace = 0;
+    NSError *error = nil;
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSDictionary *dictionary = [[NSFileManager defaultManager] attributesOfFileSystemForPath:[paths lastObject] error: &error];
+
+    if (dictionary) {
+        NSNumber *freeFileSystemSizeInBytes = [dictionary objectForKey:NSFileSystemFreeSize];
+        totalFreeSpace = [freeFileSystemSizeInBytes unsignedLongLongValue];
+    }
+    return totalFreeSpace;
+}
+
+-(uint64_t)getDiskspace
+{
+    uint64_t totalSpace = 0;
+    NSError *error = nil;
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSDictionary *dictionary = [[NSFileManager defaultManager] attributesOfFileSystemForPath:[paths lastObject] error: &error];
+
+    if (dictionary) {
+        NSNumber *fileSystemSizeInBytes = [dictionary objectForKey: NSFileSystemSize];
+        totalSpace = [fileSystemSizeInBytes unsignedLongLongValue];
+    }
+    return totalSpace;
 }
 
 // -----------------------------
