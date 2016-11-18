@@ -290,24 +290,12 @@ uint64_t logMemUsage(void) {
 
     [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Type: null\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Transfer-Encoding: binary\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+
     [body appendData:[NSData dataWithData: zipData]];
     [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
 
     NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
     NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
-
-    // Debugging
-//    NSLog(@"%@", self.device);
-//    NSLog(@"%@", self.ticketDescription);
-//    NSLog(@"%@", self.ticketNumber);
-//    NSLog(@"%@", self.contactDetails);
-//    NSLog(@"%@", self.endpoint);
-//    NSLog(@"%@", charSet);
-//    NSLog(@"%@", postLength);
-//    NSLog(@"%@", boundary);
-//    NSLog(@"%@", ContentType);
 
     // Create Request
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
