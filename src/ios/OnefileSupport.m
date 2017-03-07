@@ -40,6 +40,11 @@ typedef enum {
     NSString *_zipFilename;
     NSString *_zipPath;
     NSArray *_files;
+
+    NSString *_documentPath;
+    NSString *_cachePath;
+    NSString *_libraryPath;
+
     NSMutableArray *_paths;
 }
 
@@ -63,6 +68,10 @@ typedef enum {
 @property (nonatomic, retain) NSArray *files;
 @property (nonatomic, retain) NSMutableArray *paths;
 
+@property (nonatomic, retain) NSString *documentPath;
+@property (nonatomic, retain) NSString *cachePath;
+@property (nonatomic, retain) NSString *libraryPath;
+
 -(uint64_t)getFreeDiskspace;
 -(uint64_t)getDiskspace;
 @end
@@ -80,13 +89,21 @@ typedef enum {
 @synthesize files = _files;
 @synthesize paths = _paths;
 
+@synthesize documentPath = _documentPath;
+@synthesize cachePath = cachePath;
+@synthesize libraryPath = libraryPath;
+
 - (void)pluginInitialize
 {
     NSLog(@"OnefileSupport - pluginInitialize");
     self.inUse = NO;
-    NSArray *cachePath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES); // NSCachesDirectory
-    self.zipFilename = @"database.zip";
-    self.zipPath = [[cachePath objectAtIndex:0] stringByAppendingPathComponent:self.zipFilename];
+
+    NSArray *docpath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    self.documentPath = [docpath objectAtIndex:0];
+    NSArray *cacpath = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    self.cachePath = [cacpath objectAtIndex:0];
+    NSArray *libpath = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
+    self.libraryPath = [libpath objectAtIndex:0];
 }
 
 // ----------------------------------
@@ -95,6 +112,9 @@ typedef enum {
 - (void)onefileSupport:(CDVInvokedUrlCommand *)command
 {
     NSLog(@"OnefileSupport - (void)onefileSupport:(CDVInvokedUrlCommand*)command");
+
+    self.zipFilename = @"database.zip";
+    self.zipPath = [self.cachePath stringByAppendingPathComponent:self.zipFilename];
 
     self.command = command;
     self.callbackId = command.callbackId;
@@ -111,7 +131,6 @@ typedef enum {
     Float64 spaceFloat = ((Float64)space / GIGABYTE);
 
     NSString *model = [UIDevice currentDevice].model;
-    // NSString *systemName = [UIDevice currentDevice].systemName;
     NSString *systemVersion = [UIDevice currentDevice].systemVersion;
     NSString *versionNumber = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
     NSString *buildNumber = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"];
@@ -139,6 +158,9 @@ typedef enum {
 {
     NSLog(@"OnefileRecover - (void)onefileRecover:(CDVInvokedUrlCommand*)command");
 
+    self.zipFilename = @"evidence.zip";
+    self.zipPath = [self.cachePath stringByAppendingPathComponent:self.zipFilename];
+
     self.command = command;
     self.callbackId = command.callbackId;
     self.options = [command argumentAtIndex:0];
@@ -152,9 +174,11 @@ typedef enum {
     self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
     self.selectedServerId = [self.options objectForKey:@"selectedServerId"];
     self.endpoint = [self.options objectForKey:@"endpoint"];
-
     if(!self.ticketNumber)
         self.ticketNumber = @"";
+
+    [self fetchEvidencePaths];
+    [self zipFiles];
 
 	NSDictionary *jSON = @
 	{
@@ -249,37 +273,89 @@ uint64_t logMemUsage(void) {
         [self.paths removeAllObjects];
     else
         self.paths = [[NSMutableArray alloc] init];
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
     NSArray *databasePaths;
-    if([paths count] > 0) {
-        NSFileManager *fileManager = [NSFileManager defaultManager];
-        NSArray *directoryContents = [fileManager subpathsAtPath:[paths objectAtIndex:0]];
-        if([directoryContents count] > 0) {
-            databasePaths = [directoryContents pathsMatchingExtensions:[NSArray arrayWithObjects:@"db", nil]];
-        }
-        for(NSString *file in self.files) {
-            for(NSString *path in databasePaths) {
-                NSString *filename = [path lastPathComponent];
-                if(filename && [file isEqualToString:filename])
-                {
-                    NSString *fullPath = [NSString stringWithFormat:@"%@/%@", [paths objectAtIndex:0], path];
-                    [self.paths addObject: fullPath];
-                }
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *directoryContents = [fileManager subpathsAtPath:self.libraryPath];
+    if([directoryContents count] > 0) {
+        databasePaths = [directoryContents pathsMatchingExtensions:[NSArray arrayWithObjects:@"db", nil]];
+    }
+    for(NSString *file in self.files) {
+        for(NSString *path in databasePaths) {
+            NSString *filename = [path lastPathComponent];
+            if(filename && [file isEqualToString:filename])
+            {
+                NSString *fullPath = [NSString stringWithFormat:@"%@/%@", self.libraryPath, path];
+                [self.paths addObject: fullPath];
             }
         }
-        NSLog(@"%@", self.paths);
     }
-    else {
-        [self pluginError:@"unable to create path!! "];
+    NSLog(@"%@", self.paths);
+
+}
+
+-(void)createLogFile
+{
+    NSError *error;
+    NSString *logFilename = @"evidence-log-file.log";
+    NSString *logFilePath = [NSString stringWithFormat: @"%@/%@", self.documentPath, logFilename];
+    NSMutableString *contents = [[NSMutableString alloc] init];
+    contents = [NSMutableString stringWithFormat: @"evidence log file\r\n\r\n"];
+
+    BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:logFilePath];
+    if(fileExists) {
+        BOOL success = [[NSFileManager defaultManager] removeItemAtPath:logFilePath error:&error];
+        if(!success)
+        {
+            [self pluginError:@"error deleting temporary log file!! "];
+            return;
+        }
     }
+    // Need to remove pre-NSDocument part of path
+    for(NSString *path in self.paths) {
+        [contents appendString: path];
+        [contents appendString: @"\r\n"];
+    }
+    NSData *fileContents = [contents dataUsingEncoding:NSUTF8StringEncoding];
+    [[NSFileManager defaultManager] createFileAtPath: logFilePath
+                                            contents:fileContents
+                                          attributes:nil];
+
+    [self.paths addObject:logFilePath];
+}
+
+-(void)fetchEvidencePaths
+{
+    if(self.paths)
+        [self.paths removeAllObjects];
+    else
+        self.paths = [[NSMutableArray alloc] init];
+
+    NSArray *databasePaths;
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *directoryContents = [fileManager subpathsAtPath: self.documentPath];
+    NSLog(@"%@", directoryContents);
+    if([directoryContents count] > 0) {
+        databasePaths = [directoryContents pathsMatchingExtensions:[NSArray arrayWithObjects:@"jpg", @"png", @"wav", @"caf", @"mov", @"mp3", @"mp4", nil]];
+    }
+    for(NSString *path in databasePaths) {
+        NSString *fullPath = [NSString stringWithFormat:@"%@/%@", self.documentPath, path];
+        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath: fullPath];
+        if(fileExists) {
+            [self.paths addObject: fullPath];
+        }
+    }
+
+    [self createLogFile];
+    NSLog(@"%@", self.paths);
 }
 
 -(void)zipFiles
 {
     NSError *error;
-    NSMutableArray *filePaths = [[NSMutableArray alloc] init];
     if([self.paths count] > 0) {
-        NSLog(@"%@", filePaths);
+        NSLog(@"%@", self.zipPath);
+        NSLog(@"%@", self.paths);
         BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
         if(fileExists) {
             BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
@@ -290,11 +366,10 @@ uint64_t logMemUsage(void) {
             }
         }
         ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
-        NSString *basePath = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,  NSUserDomainMask, YES) lastObject];
-
-        NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:basePath usingResourceFork:NO];
-        if(result > 0)
-            [self uploadSupport];
+        NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:self.libraryPath usingResourceFork:NO];
+        if(result > 0) {
+            // [self uploadSupport];
+        }
         else
             [self pluginError:@"error during compression!! "];
     }
