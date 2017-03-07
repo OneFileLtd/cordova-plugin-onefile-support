@@ -1,30 +1,33 @@
 package uk.co.onefile.nomadionic.support;
 
-		import android.content.Context;
-		import android.os.Build;
-		import android.util.Log;
+import android.content.Context;
+import android.os.Build;
+import android.util.Log;
 
-		import org.apache.cordova.CallbackContext;
-		import org.apache.cordova.CordovaInterface;
-		import org.apache.cordova.CordovaPlugin;
-		import org.apache.cordova.CordovaWebView;
-		import org.json.JSONArray;
-		import org.json.JSONException;
-		import org.json.JSONObject;
+import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.CordovaWebView;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-		import java.io.BufferedInputStream;
-		import java.io.BufferedOutputStream;
-		import java.io.File;
-		import java.io.FileInputStream;
-		import java.io.FileOutputStream;
-		import java.io.IOException;
-		import java.util.HashMap;
-		import java.util.List;
-		import java.util.zip.ZipEntry;
-		import java.util.zip.ZipOutputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class OnefileSupport extends CordovaPlugin {
 	private static final int BUFFER = 2048;
+
+	private static final int STATUS_ERROR = 0;
+	private static final int STATUS_SUCCESSFUL = 1;
 
 	@Override
 	public void initialize(CordovaInterface cordova, CordovaWebView webView) {
@@ -44,7 +47,28 @@ public class OnefileSupport extends CordovaPlugin {
 			});
 			return true;
 		}
+		if (action.equals("onefileRecover")) {
+			final JSONObject config = args.getJSONObject(0);
+			cordova.getThreadPool().execute(new Runnable() {
+				public void run() {
+					recover(config, callbackContext);
+				}
+			});
+			return true;
+		}
 		return false;
+	}
+
+	private void recover(JSONObject config, CallbackContext callbackContext) {
+		try {
+			Log.i("OneFileSupportPlugin - Recovery", config.toString(2));
+			JSONObject result = new JSONObject();
+			result.put("status", STATUS_SUCCESSFUL);
+			callbackContext.success(result);
+		} catch (JSONException e) {
+			callbackContext.error(e.getMessage());
+		} finally {
+		}
 	}
 
 	private void uploadSupport(JSONObject config, CallbackContext callbackContext) {

@@ -33,4 +33,28 @@ Support.prototype.sendSupport = function (config, success, error) {
 	exec(success, error, "OnefileSupport", "onefileSupport", [config]);
 };
 
+Support.prototype.recover = function (config, success, error) {
+	if (!config.username) {
+		error('Missing username');
+		return;
+	}
+	if (!config.password) {
+		error('Missing password');
+		return;
+	}
+	if (!config.ticketNumber) {
+		error('Missing ticket number');
+		return;
+	}
+	if (!config.selectedServerId) {
+		error('Missing selected server id');
+		return;
+	}
+	if (!config.endpoint) {
+		error('Missing endpoint');
+		return;
+	}
+	exec(success, error, "OnefileSupport", "onefileRecover", [config]);
+};
+
 module.exports = new Support();

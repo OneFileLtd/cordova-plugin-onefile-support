@@ -15,12 +15,21 @@ typedef enum {
     SUPPORT_ERROR = 0,
 } SUPPORT_ERRORS;
 
+typedef enum {
+    STATUS_ERROR = 0,
+    STATUS_SUCCESSFUL
+} RECOVER_STATUS;
+
 @interface OnefileSupport ()
 {
     NSURLConnection *_uploadConnection;
     CDVInvokedUrlCommand *_command;
     NSString *_callbackId;
     NSDictionary *_options;
+
+	NSString *_username;
+	NSString *_password;
+	NSString *_selectedServerId;
 
     NSString *_ticketDescription;
     NSString *_ticketNumber;
@@ -38,6 +47,10 @@ typedef enum {
 @property (nonatomic, retain) CDVInvokedUrlCommand *command;
 @property (nonatomic, retain) NSString *callbackId;
 @property (nonatomic, retain) NSDictionary *options;
+
+@property (nonatomic, retain) NSString *username;
+@property (nonatomic, retain) NSString *password;
+@property (nonatomic, retain) NSString *selectedServerId;
 
 @property (nonatomic, retain) NSString *ticketDescription;
 @property (nonatomic, retain) NSString *ticketNumber;
@@ -120,6 +133,35 @@ typedef enum {
         self.ticketNumber = @"";
     [self fetchDatabasePaths];
     [self zipFiles];
+}
+
+- (void)onefileRecover:(CDVInvokedUrlCommand *)command
+{
+    NSLog(@"OnefileRecover - (void)onefileRecover:(CDVInvokedUrlCommand*)command");
+
+    self.command = command;
+    self.callbackId = command.callbackId;
+    self.options = [command argumentAtIndex:0];
+
+    if ([self.options isKindOfClass:[NSNull class]]) {
+        self.options = [NSDictionary dictionary];
+    }
+
+    self.username = [self.options objectForKey:@"username"];
+    self.password = [self.options objectForKey:@"password"];
+    self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
+    self.selectedServerId = [self.options objectForKey:@"selectedServerId"];
+    self.endpoint = [self.options objectForKey:@"endpoint"];
+
+    if(!self.ticketNumber)
+        self.ticketNumber = @"";
+
+	NSDictionary *jSON = @
+	{
+		@"status": [NSNumber numberWithInteger:STATUS_SUCCESSFUL],
+	};
+	NSLog(@"%@", jSON);
+	[self pluginSuccess:jSON];
 }
 
 static long prevMemUsage = 0;

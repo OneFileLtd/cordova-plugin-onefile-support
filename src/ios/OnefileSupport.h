@@ -12,4 +12,5 @@
 
 - (void)pluginInitialize;
 - (void)onefileSupport:(CDVInvokedUrlCommand*)command;
+- (void)onefileRecover:(CDVInvokedUrlCommand*)command;
 @end

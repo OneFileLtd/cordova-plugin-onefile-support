@@ -25,7 +25,7 @@
 	<description>Cordova Plugin OneFile Support</description>
 	<license>Onefile Limited</license>
 	<keywords>nomad,onefile,support</keywords>
-	<repo>https://github.com/ben3005/cordova-plugin-audio-recorder.git</repo>
+	<repo>https://github.com/ben3005/cordova-plugin-onefile-support.git</repo>
 	<issue></issue>
 
 	<js-module src="www/onefileSupport.js" name="OnefileSupport">
