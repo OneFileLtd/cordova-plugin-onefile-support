@@ -42,10 +42,6 @@ Support.prototype.recover = function (config, success, error) {
 		error('Missing password');
 		return;
 	}
-	if (!config.ticketNumber) {
-		error('Missing ticket number');
-		return;
-	}
 	if (!config.selectedServerId) {
 		error('Missing selected server id');
 		return;
