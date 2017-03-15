@@ -11,6 +11,17 @@
 #define GIGABYTE                                ((uint64_t)1073741824)
 #define GIGABYTE_1000                           ((uint64_t)1000000000)
 
+#define MAX_SINGLE_FILE_SIZE                    (610000)
+#define MAX_ZIP_FILE_SIZE                       (610000)
+
+#define ZIP_FILENAME                            @"ZipFile%d"
+#define EVIDENCE_LOG_FILENAME                   @"evidence-log-file.log"
+
+#define REQUIRED_DISK_SPACE                     (1 * GIGABYTE_1000)
+
+#define eNOT_ENOUGH_DISK_SPACE                  @"Not enough space"
+#define eCANT_DELETE_TEMPORARY_FILE             @"error deleting temporary log file!! "
+#define eFILE_DOESNT_EXIST                      @"file doesn't exist"
 typedef enum {
     SUPPORT_ERROR = 0,
 } SUPPORT_ERRORS;
@@ -177,15 +188,16 @@ typedef enum {
     if(!self.ticketNumber)
         self.ticketNumber = @"";
 
-    [self fetchEvidencePaths];
-    [self zipFiles];
+    NSData *jSONData = [self createEvidenceJSON];
+    [self createLogFile: jSONData];
+    [self zipFilesFromJSON: jSONData];
 
-	NSDictionary *jSON = @
+	NSDictionary *jsonResult = @
 	{
 		@"status": [NSNumber numberWithInteger:STATUS_SUCCESSFUL],
 	};
-	NSLog(@"%@", jSON);
-	[self pluginSuccess:jSON];
+	NSLog(@"%@", jsonResult);
+	[self pluginSuccess:jsonResult];
 }
 
 static long prevMemUsage = 0;
@@ -291,32 +303,21 @@ uint64_t logMemUsage(void) {
         }
     }
     NSLog(@"%@", self.paths);
-
 }
 
--(void)createLogFile
+-(void)createLogFile:(NSData *)fileContents
 {
     NSError *error;
-    NSString *logFilename = @"evidence-log-file.log";
-    NSString *logFilePath = [NSString stringWithFormat: @"%@/%@", self.documentPath, logFilename];
-    NSMutableString *contents = [[NSMutableString alloc] init];
-    contents = [NSMutableString stringWithFormat: @"evidence log file\r\n\r\n"];
-
+    NSString *logFilePath = [NSString stringWithFormat: @"%@/%@", self.documentPath, EVIDENCE_LOG_FILENAME];
     BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:logFilePath];
     if(fileExists) {
         BOOL success = [[NSFileManager defaultManager] removeItemAtPath:logFilePath error:&error];
         if(!success)
         {
-            [self pluginError:@"error deleting temporary log file!! "];
+            [self pluginError:eCANT_DELETE_TEMPORARY_FILE];
             return;
         }
     }
-    // Need to remove pre-NSDocument part of path
-    for(NSString *path in self.paths) {
-        [contents appendString: path];
-        [contents appendString: @"\r\n"];
-    }
-    NSData *fileContents = [contents dataUsingEncoding:NSUTF8StringEncoding];
     [[NSFileManager defaultManager] createFileAtPath: logFilePath
                                             contents:fileContents
                                           attributes:nil];
@@ -324,30 +325,138 @@ uint64_t logMemUsage(void) {
     [self.paths addObject:logFilePath];
 }
 
--(void)fetchEvidencePaths
+-(NSData *)createEvidenceJSON
 {
+    uint64_t space = [self getDiskspace];
+    if(space < REQUIRED_DISK_SPACE) {
+        [self pluginError: eNOT_ENOUGH_DISK_SPACE];
+        return nil;
+    }
     if(self.paths)
         [self.paths removeAllObjects];
     else
         self.paths = [[NSMutableArray alloc] init];
-
-    NSArray *databasePaths;
+    NSError *error;
+    NSArray *evidencePaths;
+    unsigned long long currentZipSize = 0;
+    int zipFileIndex = 0;
+    NSUInteger numberOfFilesInZip = 0;
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSArray *directoryContents = [fileManager subpathsAtPath: self.documentPath];
-    NSLog(@"%@", directoryContents);
+
     if([directoryContents count] > 0) {
-        databasePaths = [directoryContents pathsMatchingExtensions:[NSArray arrayWithObjects:@"jpg", @"png", @"wav", @"caf", @"mov", @"mp3", @"mp4", nil]];
+        evidencePaths = [directoryContents pathsMatchingExtensions:[NSArray arrayWithObjects:@"jpg", @"jpeg", @"png", @"wav", @"caf", @"mov", @"mp3", @"mp4", nil]];
     }
-    for(NSString *path in databasePaths) {
-        NSString *fullPath = [NSString stringWithFormat:@"%@/%@", self.documentPath, path];
+    NSMutableArray *zipFiles = [[NSMutableArray alloc] init];
+    NSMutableArray *files = [[NSMutableArray alloc] init];
+    NSMutableArray *excluded = [[NSMutableArray alloc] init];
+    
+    for(NSString *path in evidencePaths) {
+        NSString *fullPath = [NSString stringWithFormat: @"%@/%@", self.documentPath, path];
+        NSString *filePath = [NSString stringWithFormat: @"%@", path];
+        NSString *name = [NSString stringWithFormat:@"%@", [path lastPathComponent]];
         BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath: fullPath];
+        BOOL inzipfile = false;
+        unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:fullPath error:nil] fileSize];
+    
         if(fileExists) {
-            [self.paths addObject: fullPath];
+            inzipfile = (fileSize > 0 && fileSize <= MAX_SINGLE_FILE_SIZE);
+            NSDictionary *file = @{
+                                   @"FullPath" : fullPath,
+                                   @"Path" : filePath,
+                                   @"Name" : name,
+                                   @"Size" : [NSNumber numberWithUnsignedInteger: fileSize],
+                                   @"InZipFile" : [NSNumber numberWithBool: inzipfile]
+                                   };
+            if(inzipfile) {
+                if((currentZipSize + fileSize) > MAX_ZIP_FILE_SIZE) {
+                    NSDictionary *zipFile = @{
+                                           @"Name" : [NSString stringWithFormat: ZIP_FILENAME, zipFileIndex],
+                                           @"Size" : [NSNumber numberWithUnsignedInteger: currentZipSize],
+                                           @"Files" : [files copy],
+                                           @"Count" : [NSNumber numberWithUnsignedInteger: numberOfFilesInZip]
+                                           };
+                    [zipFiles addObject: zipFile];
+                    zipFileIndex++;
+                    currentZipSize = 0;
+                    numberOfFilesInZip = 0;
+                    [files removeAllObjects];
+                }
+                [files addObject:file];
+                numberOfFilesInZip++;
+                currentZipSize += fileSize;
+            } else {
+                // File too big to add to zip or send up, or is zero so no point.
+                [excluded addObject: file];
+            }
+        }
+        else
+        {
+            [self pluginError: eFILE_DOESNT_EXIST];
+            return nil;
         }
     }
+    if([files count] > 0) {
+        NSDictionary *zipFile = @{
+                                  @"Name" : [NSString stringWithFormat: ZIP_FILENAME, zipFileIndex],
+                                  @"Size" : [NSNumber numberWithUnsignedInteger: currentZipSize],
+                                  @"Files" : [files copy],
+                                  @"Count" : [NSNumber numberWithUnsignedInteger: numberOfFilesInZip]
+                                  };
+        [zipFiles addObject: zipFile];
+    }
+    
+    NSDictionary *logFile = @{
+                              @"ExcludedFiles" : excluded,
+                              @"TicketNumber" : self.ticketNumber,
+                              @"ZipFiles" : zipFiles
+                           };
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject: logFile
+                                                       options: NSJSONWritingPrettyPrinted
+                                                         error: &error];
+    NSString *jSON = [[NSString alloc] initWithData: jsonData encoding: NSUTF8StringEncoding];
+    NSLog(@"%@", jSON);
+    return jsonData;
+}
 
-    [self createLogFile];
-    NSLog(@"%@", self.paths);
+- (void)zipFilesFromJSON:(NSData *)jSON {
+    if(jSON) {
+        NSError *error;
+        NSArray *jsonArray = [[NSJSONSerialization JSONObjectWithData:jSON options:0 error:&error] objectForKey:@"ZipFiles"];
+        NSLog(@"%llu",(unsigned long long)[jsonArray count]);
+        if([jsonArray count] > 0) {
+            for(NSDictionary *currentZip in jsonArray) {
+                NSLog(@"JSON Dict: %@", currentZip);
+                NSString *zipPath = [self.documentPath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip",[currentZip objectForKey:@"Name"]]];
+                NSMutableArray *filePaths = [[NSMutableArray alloc] init];
+                for(NSDictionary *file in [currentZip objectForKey:@"Files"]) {
+                    [filePaths addObject:[file objectForKey:@"FullPath"]];
+                }
+                NSArray *filesToZip = filePaths;
+                BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:zipPath];
+                if(fileExists) {
+                    BOOL success = [[NSFileManager defaultManager] removeItemAtPath:zipPath error:&error];
+                    if(!success)
+                    {
+                        [self pluginError:@"error deleting temporary zip file!! "];
+                        return;
+                    }
+                }
+                ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:zipPath];
+                NSInteger result = [fileArchive deflateFiles:filesToZip relativeToPath:self.documentPath usingResourceFork:NO];
+                if(result > 0) {
+                    unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:zipPath error:nil] fileSize];
+                    NSLog(@"Size of zipped up file: %llu", fileSize);
+                    [self uploadEvidenceZip];
+                }
+                else
+                {
+                    [self pluginError:@"error during compression of evidence files!! "];
+                    return;
+                }
+            }
+        }
+    }
 }
 
 -(void)zipFiles
@@ -368,7 +477,7 @@ uint64_t logMemUsage(void) {
         ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
         NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:self.libraryPath usingResourceFork:NO];
         if(result > 0) {
-            // [self uploadSupport];
+            [self uploadSupport];
         }
         else
             [self pluginError:@"error during compression!! "];
@@ -376,6 +485,10 @@ uint64_t logMemUsage(void) {
     else {
         [self pluginError:@"no databases found!! "];
     }
+}
+
+- (void)uploadEvidenceZip
+{
 }
 
 - (void)uploadSupport
