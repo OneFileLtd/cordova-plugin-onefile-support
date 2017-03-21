@@ -57,6 +57,9 @@ typedef enum {
     NSString *_libraryPath;
 
     NSMutableArray *_paths;
+    NSString *_authEndpoint;
+    NSString *_startEndpoint;
+    NSString *_uploadEndpoint;
 }
 
 @property (nonatomic, retain) NSURLConnection *uploadConnection;
@@ -83,6 +86,11 @@ typedef enum {
 @property (nonatomic, retain) NSString *cachePath;
 @property (nonatomic, retain) NSString *libraryPath;
 
+@property (nonatomic, retain) NSString *authEndpoint;
+@property (nonatomic, retain) NSString *startEndpoint;
+@property (nonatomic, retain) NSString *uploadEndpoint;
+
+
 -(uint64_t)getFreeDiskspace;
 -(uint64_t)getDiskspace;
 @end
@@ -103,6 +111,10 @@ typedef enum {
 @synthesize documentPath = _documentPath;
 @synthesize cachePath = cachePath;
 @synthesize libraryPath = libraryPath;
+
+@synthesize authEndpoint = _authEndpoint;
+@synthesize startEndpoint = _startEndpoint;
+@synthesize uploadEndpoint = _uploadEndpoint;
 
 - (void)pluginInitialize
 {
@@ -184,14 +196,20 @@ typedef enum {
     self.password = [self.options objectForKey:@"password"];
     self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
     self.selectedServerId = [self.options objectForKey:@"selectedServerId"];
-    self.endpoint = [self.options objectForKey:@"endpoint"];
+    self.startEndpoint = [self.options objectForKey:@"startEndpoint"];
+    self.uploadEndpoint = [self.options objectForKey:@"uploadEndpoint"];
     if(!self.ticketNumber)
         self.ticketNumber = @"";
 
-    NSData *jSONData = [self createEvidenceJSON];
+    NSData *jSONData = [self createEvidenceLog];
     [self createLogFile: jSONData];
-    [self zipFilesFromJSON: jSONData];
+    [self zipFilesFromEvidenceLog: jSONData];
 
+    
+    [self authRecovery];
+    [self startRecovery: jSONData];
+    [self uploadRecovery: jSONData];
+    
 	NSDictionary *jsonResult = @
 	{
 		@"status": [NSNumber numberWithInteger:STATUS_SUCCESSFUL],
@@ -325,7 +343,7 @@ uint64_t logMemUsage(void) {
     [self.paths addObject:logFilePath];
 }
 
--(NSData *)createEvidenceJSON
+-(NSData *)createEvidenceLog
 {
     uint64_t space = [self getDiskspace];
     if(space < REQUIRED_DISK_SPACE) {
@@ -419,7 +437,7 @@ uint64_t logMemUsage(void) {
     return jsonData;
 }
 
-- (void)zipFilesFromJSON:(NSData *)jSON {
+- (void)zipFilesFromEvidenceLog:(NSData *)jSON {
     if(jSON) {
         NSError *error;
         NSArray *jsonArray = [[NSJSONSerialization JSONObjectWithData:jSON options:0 error:&error] objectForKey:@"ZipFiles"];
@@ -539,6 +557,105 @@ uint64_t logMemUsage(void) {
     // Send Request
     [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
 
+    // Process Response
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+    if ([response respondsToSelector:@selector(allHeaderFields)]) {
+        NSDictionary *jSON = @
+        {
+            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
+            @"headers": [httpResponse allHeaderFields]
+        };
+        NSLog(@"%@", jSON);
+        [self pluginSuccess:jSON];
+    }
+}
+
+- (void)authRecovery
+{
+    NSURLResponse *response;
+    NSError *error;
+    NSURL *url = [NSURL URLWithString:self.authEndpoint];
+    NSMutableData *body = [[NSMutableData data] init];
+    // Create Request
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
+    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
+    [request setHTTPMethod:@"POST"];
+    [request setValue:self.username forHTTPHeaderField:@"X-Username"];
+    [request setValue:self.password forHTTPHeaderField:@"X-Password"];
+    [request setHTTPBody:body];
+    
+    // Send Request
+    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    
+    // Process Response
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+    if ([response respondsToSelector:@selector(allHeaderFields)]) {
+        NSLog(@"%@", response);
+        NSDictionary *jSON = @
+        {
+            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
+            @"headers": [httpResponse allHeaderFields]
+        };
+        NSLog(@"%@", jSON);
+        [self pluginSuccess:jSON];
+    }
+}
+
+- (void)startRecovery:(NSData *)jSON
+{
+    NSURLResponse *response;
+    NSError *error;
+    NSURL *url = [NSURL URLWithString:self.startEndpoint];
+    NSString *ContentType = [NSString stringWithFormat:@"application/json;"];
+    NSMutableData *body = [[NSMutableData data] initWithData:jSON];
+    NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
+    
+    // Create Request
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
+    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
+    [request setHTTPMethod:@"POST"];
+    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
+    [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
+    [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
+    [request setHTTPBody:body];
+    
+    // Send Request
+    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    
+    // Process Response
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+    if ([response respondsToSelector:@selector(allHeaderFields)]) {
+        NSDictionary *jSON = @
+        {
+            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
+            @"headers": [httpResponse allHeaderFields]
+        };
+        NSLog(@"%@", jSON);
+        [self pluginSuccess:jSON];
+    }
+}
+
+- (void)uploadRecovery:(NSData *)jSON
+{
+    NSURLResponse *response;
+    NSError *error;
+    NSURL *url = [NSURL URLWithString:self.uploadEndpoint];
+    NSString *ContentType = [NSString stringWithFormat:@"application/json;"];
+    NSMutableData *body = [[NSMutableData data] initWithData:jSON];
+    NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
+    
+    // Create Request
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
+    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
+    [request setHTTPMethod:@"POST"];
+    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
+    [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
+    [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
+    [request setHTTPBody:body];
+    
+    // Send Request
+    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    
     // Process Response
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
     if ([response respondsToSelector:@selector(allHeaderFields)]) {

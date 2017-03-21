@@ -13,4 +13,8 @@
 - (void)pluginInitialize;
 - (void)onefileSupport:(CDVInvokedUrlCommand*)command;
 - (void)onefileRecover:(CDVInvokedUrlCommand*)command;
+
+-(void)authRecovery;
+-(void)startRecovery:(NSData *)jSON;
+-(void)uploadRecovery:(NSData *)jSON;
 @end
