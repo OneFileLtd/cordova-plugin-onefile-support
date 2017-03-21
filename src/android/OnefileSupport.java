@@ -24,7 +24,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 public class OnefileSupport extends CordovaPlugin {
-	private static final String EVIDENCE_LOG_FILENAME = "evidence-log.txt";
+	private static final String EVIDENCE_LOG_FILENAME = "evidence-log.json";
 	private static final String TEST_DIRECTORY = "/storage/sdcard0/onefile-test-area";
 	private static final int BUFFER = 2048;
 	private static final String LINE_FEED = "\r\n";
@@ -80,9 +80,9 @@ public class OnefileSupport extends CordovaPlugin {
 				rootPath = cordova.getActivity().getApplicationContext().getFilesDir().getPath() + "/" + serverPath;
 				Log.i("OneFileSupportPlugin", "rootPath" + rootPath);
 
-				JSONObject jSONData = createEvidenceJSON();
+				JSONObject jSONData = createEvidenceLog();
 				createLogFile(jSONData);
-				zipFilesFromJSON(jSONData);
+				zipFilesFromEvidenceLog(jSONData);
 
 				JSONObject result = new JSONObject();
 				result.put("status", STATUS_SUCCESSFUL);
@@ -109,7 +109,7 @@ public class OnefileSupport extends CordovaPlugin {
 			Context context = this.cordova.getActivity().getApplicationContext();
 			headers.put("X-SessionID", sessionToken);
 
-			MultipartUtility multipart = new MultipartUtility(endpoint, "UTF-8", headers);
+			uk.co.onefile.nomadionic.support.MultipartUtility multipart = new uk.co.onefile.nomadionic.support.MultipartUtility(endpoint, "UTF-8", headers);
 
 			if(!config.isNull("ticketNumber")) {
 				ticketNumber = config.getString("ticketNumber");
@@ -162,6 +162,8 @@ public class OnefileSupport extends CordovaPlugin {
 		for(int i=0; i < files.length(); i++) {
 			FileInputStream fi = new FileInputStream(this.cordova.getActivity().getDatabasePath(files.getString(i)));
 			origin = new BufferedInputStream(fi, BUFFER);
+			Log.i("createDatabaseZipFile", files.getString(i));
+			Log.i("createDatabaseZipFile", files.getString(i).substring(files.getString(i).lastIndexOf("/") + 1));
 			ZipEntry entry = new ZipEntry(files.getString(i).substring(files.getString(i).lastIndexOf("/") + 1));
 			out.putNextEntry(entry);
 			int count;
@@ -199,9 +201,9 @@ public class OnefileSupport extends CordovaPlugin {
 		return inFiles;
 	}
 
-	public void createLogFile(JSONObject body) {
+	public void createLogFile(JSONObject jSON) {
 		try {
-			String sBody = body.toString();
+			String sBody = jSON.toString();
 			String dataPath = TEST_DIRECTORY; // cordova.getActivity().getApplicationContext().getFilesDir().getPath();
 			Log.d("debug", "-" + dataPath);
 			File logFile = new File(dataPath);
@@ -216,7 +218,7 @@ public class OnefileSupport extends CordovaPlugin {
 		}
 	}
 
-	public JSONObject createEvidenceJSON() {
+	public JSONObject createEvidenceLog() {
 		try {
 			JSONArray zipFiles = new JSONArray();
 			JSONArray files = new JSONArray();
@@ -229,59 +231,63 @@ public class OnefileSupport extends CordovaPlugin {
 			getEvidenceFiles();
 
 			int numberOfFiles = evidenceFiles.size();
-			do {
-				File fileObj = evidenceFiles.get(currentFile);
-				Long fileSize = fileObj.length();
-				boolean inzipfile = (fileSize > 0 && fileSize <= MAX_SINGLE_FILE_SIZE);
-				if (fileObj.exists()) {
-					JSONObject file = new JSONObject();
-					file.put("FullPath", fileObj.getAbsolutePath());
-					file.put("Path", fileObj.getPath());
-					file.put("Name", fileObj.getName());
-					file.put("Size", fileSize);
-					file.put("InZipFile", inzipfile);
+			if(numberOfFiles > 0) {
+				do {
+					File fileObj = evidenceFiles.get(currentFile);
+					Long fileSize = fileObj.length();
+					boolean inzipfile = (fileSize > 0 && fileSize <= MAX_SINGLE_FILE_SIZE);
+					if (fileObj.exists()) {
 
-					if (inzipfile) {
-						if ((currentZipSize + fileSize) > MAX_ZIP_SIZE) {
-							JSONObject zipFile = new JSONObject();
-							zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
-							zipFile.put("Size", currentZipSize);
-							zipFile.put("Files", files);
-							zipFile.put("Count", numberOfFilesInZip);
+						int position = fileObj.getAbsolutePath().indexOf("/files/") + 7;
+						JSONObject file = new JSONObject();
+						file.put("FullPath", fileObj.getAbsolutePath());
+						file.put("Path", fileObj.getAbsolutePath().substring(position));
+						file.put("Name", fileObj.getName());
+						file.put("Size", fileSize);
+						if(inzipfile)
+							file.put("InZipFile", inzipfile);
 
-							zipFiles.put(zipFile);
-							zipFileIndex++;
-							currentZipSize = 0L;
-							numberOfFilesInZip = 0L;
-							files = new JSONArray();
+						if (inzipfile) {
+							if ((currentZipSize + fileSize) > MAX_ZIP_SIZE) {
+								JSONObject zipFile = new JSONObject();
+								zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
+								zipFile.put("Size", currentZipSize);
+								zipFile.put("Files", files);
+								zipFile.put("Count", numberOfFilesInZip);
+
+								zipFiles.put(zipFile);
+								zipFileIndex++;
+								currentZipSize = 0L;
+								numberOfFilesInZip = 0L;
+								files = new JSONArray();
+							}
+							files.put(file);
+							numberOfFilesInZip++;
+							currentZipSize += fileSize;
+						} else {
+							excluded.put(file);
 						}
-						files.put(file);
-						numberOfFilesInZip++;
-						currentZipSize += fileSize;
 					} else {
-						excluded.put(file);
+						currentCallbackContext.error(eFILE_DOESNT_EXIST);
 					}
+					currentFile++;
+				} while (currentFile < numberOfFiles);
+				if (files.length() > 0) {
+					JSONObject zipFile = new JSONObject();
+					zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
+					zipFile.put("Size", currentZipSize);
+					zipFile.put("Files", files);
+					zipFile.put("Count", numberOfFilesInZip);
+					zipFiles.put(zipFile);
 				}
-				else
-				{
-					currentCallbackContext.error(eFILE_DOESNT_EXIST);
-				}
-				currentFile++;
-			} while (currentFile < numberOfFiles);
-			if(files.length() > 0) {
-				JSONObject zipFile = new JSONObject();
-				zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
-				zipFile.put("Size", currentZipSize);
-				zipFile.put("Files", files);
-				zipFile.put("Count", numberOfFilesInZip);
-				zipFiles.put(zipFile);
+				JSONObject logFile = new JSONObject();
+				logFile.put("ZipFiles", zipFiles);
+				logFile.put("Excluded", excluded);
+				logFile.put("TicketNumber", 0);
+				Log.i("OnefileSupport-logFile", logFile.toString(2));
+				return logFile;
 			}
-			JSONObject logFile = new JSONObject();
-			logFile.put("ZipFiles", zipFiles);
-			logFile.put("Excluded", excluded);
-			logFile.put("TicketNumber", 0);
-			Log.i("OnefileSupport-logFile", logFile.toString(2));
-			return logFile;
+			return null;
 		}
 		catch (JSONException e) {
 			e.printStackTrace();
@@ -289,40 +295,44 @@ public class OnefileSupport extends CordovaPlugin {
 		return null;
 	}
 
-	public void zipFilesFromJSON(JSONObject jSON) {
+	public void zipFilesFromEvidenceLog(JSONObject jSON) {
 		try {
-			JSONArray zipFiles = jSON.getJSONArray("ZipFiles");
-			if(zipFiles.length() > 0) {
-				BufferedInputStream origin = null;
-				// Each zip file --
-				for (int i = 0; i < zipFiles.length(); i++) {
-					JSONObject currentZip = zipFiles.getJSONObject(i);
-					// Create zip file
-					String zipPath = currentZip.get("Name").toString();
-					File zipFile = new File(TEST_DIRECTORY, zipPath  + ".zip");
-					Log.i("zipFilesFromJSON", zipFile.getAbsolutePath());
-					FileOutputStream dest = new FileOutputStream(zipFile);
-					ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
+			if(jSON != null) {
+				JSONArray zipFiles = jSON.getJSONArray("ZipFiles");
+				if (zipFiles.length() > 0) {
+					BufferedInputStream origin = null;
+					// Each zip file --
+					for (int i = 0; i < zipFiles.length(); i++) {
+						JSONObject currentZip = zipFiles.getJSONObject(i);
+						// Create zip file
+						String zipPath = currentZip.get("Name").toString();
+						File zipFile = new File(TEST_DIRECTORY, zipPath + ".zip");
+						Log.i("zipFilesFromJSON", zipFile.getAbsolutePath());
+						FileOutputStream dest = new FileOutputStream(zipFile);
+						ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
 
-					JSONArray files = currentZip.getJSONArray("Files");
-					for(int f = 0; f < files.length(); f++) {
+						JSONArray files = currentZip.getJSONArray("Files");
+						for (int f = 0; f < files.length(); f++) {
 
-						JSONObject file = files.getJSONObject(f);
-						String path = file.get("FullPath").toString();
-						File evidenceFile = new File(path);
-						FileInputStream evidenceStream = new FileInputStream(evidenceFile);
+							JSONObject file = files.getJSONObject(f);
+							String path = file.get("FullPath").toString();
+							File evidenceFile = new File(path);
+							FileInputStream evidenceStream = new FileInputStream(evidenceFile);
 
-						byte data[] = new byte[BUFFER];
-						origin = new BufferedInputStream(evidenceStream, BUFFER);
-						ZipEntry entry = new ZipEntry(evidenceFile.getAbsolutePath());
-						out.putNextEntry(entry);
-						int count;
-						while ((count = origin.read(data, 0, BUFFER)) != -1) {
-							out.write(data, 0, count);
+							byte data[] = new byte[BUFFER];
+							origin = new BufferedInputStream(evidenceStream, BUFFER);
+							int position = evidenceFile.getAbsolutePath().indexOf("/files/") + 7;
+							Log.i("zipFilesFromJSON", evidenceFile.getAbsolutePath().substring(position));
+							ZipEntry entry = new ZipEntry(evidenceFile.getAbsolutePath().substring(position));
+							out.putNextEntry(entry);
+							int count;
+							while ((count = origin.read(data, 0, BUFFER)) != -1) {
+								out.write(data, 0, count);
+							}
+							origin.close();
 						}
-						origin.close();
+						out.close();
 					}
-					out.close();
 				}
 			}
 		}
