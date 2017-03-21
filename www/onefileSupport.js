@@ -34,16 +34,24 @@ Support.prototype.sendSupport = function (config, success, error) {
 };
 
 Support.prototype.recover = function (config, success, error) {
-	if (!config.username) {
-		error('Missing username');
+	if (!config.sessionToken) {
+		error('Missing session');
 		return;
 	}
-	if (!config.password) {
-		error('Missing password');
+	if (!config.ticketNumber) {
+		error('Missing ticket number');
 		return;
 	}
-	if (!config.selectedServerId) {
-		error('Missing selected server id');
+	if (!config.maxFileSize) {
+		error('Missing max file size');
+		return;
+	}
+	if (!config.maxZipFiles) {
+		error('Missing max number of zip files');
+		return;
+	}
+	if (!config.selectedServer) {
+		error('Missing selected server');
 		return;
 	}
 	if (!config.endpoint) {
