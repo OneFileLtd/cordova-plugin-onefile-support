@@ -16,12 +16,17 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
+import static android.view.View.X;
 
 public class OnefileSupport extends CordovaPlugin {
 	private static final String EVIDENCE_LOG_FILENAME = "evidence-log.json";
@@ -39,6 +44,12 @@ public class OnefileSupport extends CordovaPlugin {
 	private List<File> evidenceFiles;
 	private static String rootPath;
 	private CallbackContext currentCallbackContext;
+
+	private String sessionToken;
+	private String sessionGUID;
+	private String startEndpoint;
+	private String uploadEndpoint;
+	private String ticketNumber;
 
 	@Override
 	public void initialize(CordovaInterface cordova, CordovaWebView webView) {
@@ -74,14 +85,19 @@ public class OnefileSupport extends CordovaPlugin {
 		currentCallbackContext = callbackContext;
 		try {
 			Log.i("OneFileSupportPlugin", config.toString(2));
-
-			String serverPath = config.getString("selectedServerId");
+			sessionToken = config.getString("sessionToken");
+			startEndpoint = config.getString("endpoint");
+			uploadEndpoint = config.getString("endpoint");
+			ticketNumber = config.getString("ticketNumber");
+			String serverPath = config.getString("selectedServer");
 			if(serverPath != null) {
 				rootPath = cordova.getActivity().getApplicationContext().getFilesDir().getPath() + "/" + serverPath;
 				Log.i("OneFileSupportPlugin", "rootPath" + rootPath);
 
 				JSONObject jSONData = createEvidenceLog();
 				createLogFile(jSONData);
+
+				startRecovery(jSONData);
 				zipFilesFromEvidenceLog(jSONData);
 
 				JSONObject result = new JSONObject();
@@ -89,6 +105,7 @@ public class OnefileSupport extends CordovaPlugin {
 				callbackContext.success(result);
 			}
 		} catch (JSONException e) {
+			e.printStackTrace();
 			callbackContext.error(e.getMessage());
 		} finally {
 		}
@@ -283,8 +300,8 @@ public class OnefileSupport extends CordovaPlugin {
 				JSONObject logFile = new JSONObject();
 				logFile.put("ZipFiles", zipFiles);
 				logFile.put("Excluded", excluded);
-				logFile.put("TicketNumber", 0);
-				Log.i("OnefileSupport-logFile", logFile.toString(2));
+				logFile.put("TicketNumber", ticketNumber);
+				// Log.i("OnefileSupport-logFile", logFile.toString(2));
 				return logFile;
 			}
 			return null;
@@ -297,6 +314,11 @@ public class OnefileSupport extends CordovaPlugin {
 
 	public void zipFilesFromEvidenceLog(JSONObject jSON) {
 		try {
+			Log.i("zipFilesFromEvidenceLog", jSON.toString(2));
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		try {
 			if(jSON != null) {
 				JSONArray zipFiles = jSON.getJSONArray("ZipFiles");
 				if (zipFiles.length() > 0) {
@@ -307,7 +329,7 @@ public class OnefileSupport extends CordovaPlugin {
 						// Create zip file
 						String zipPath = currentZip.get("Name").toString();
 						File zipFile = new File(TEST_DIRECTORY, zipPath + ".zip");
-						Log.i("zipFilesFromJSON", zipFile.getAbsolutePath());
+						// Log.i("zipFilesFromJSON", zipFile.getAbsolutePath());
 						FileOutputStream dest = new FileOutputStream(zipFile);
 						ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
 
@@ -322,7 +344,7 @@ public class OnefileSupport extends CordovaPlugin {
 							byte data[] = new byte[BUFFER];
 							origin = new BufferedInputStream(evidenceStream, BUFFER);
 							int position = evidenceFile.getAbsolutePath().indexOf("/files/") + 7;
-							Log.i("zipFilesFromJSON", evidenceFile.getAbsolutePath().substring(position));
+							// Log.i("zipFilesFromJSON", evidenceFile.getAbsolutePath().substring(position));
 							ZipEntry entry = new ZipEntry(evidenceFile.getAbsolutePath().substring(position));
 							out.putNextEntry(entry);
 							int count;
@@ -332,6 +354,7 @@ public class OnefileSupport extends CordovaPlugin {
 							origin.close();
 						}
 						out.close();
+						uploadEvidenceZip(zipFile);
 					}
 				}
 			}
@@ -369,5 +392,87 @@ public class OnefileSupport extends CordovaPlugin {
 		}
 	}
 
-	// ~/Library/Android/sdk/platform-tools/adb pull /storage/sdcard0/onefile-test-area/ DATA
+	private void startRecovery(JSONObject jSON) {
+		HttpURLConnection client = null;
+		String jSONString = jSON.toString();
+		String SessionTokenString = sessionToken.toString();
+		try {
+			Log.i("startRecovery", startEndpoint);
+			Log.i("startRecovery", jSONString);
+			Log.i("startRecovery", SessionTokenString);
+			Log.i("startRecovery", Integer.toString(jSONString.getBytes("UTF-8").length));
+			Log.i("startRecovery", Integer.toString(jSONString.length()));
+
+			URL url = new URL(startEndpoint);
+			client = (HttpURLConnection) url.openConnection();
+			client.setRequestMethod("POST");
+			client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+			client.setRequestProperty("Accept", "application/json");
+			client.setRequestProperty("Content-Length", Integer.toString(jSONString.getBytes("UTF-8").length));
+			client.setRequestProperty("X-SessionID", SessionTokenString);
+			client.setUseCaches(false);
+			client.setDoOutput(true);
+			client.setDoInput(true);
+			OutputStream os = client.getOutputStream();
+			os.write(jSONString.getBytes("UTF-8"));
+			os.close();
+			client.connect();
+
+			int responseCode = client.getResponseCode();
+			Log.i("startRecovery", "ResponseCode: " + responseCode);
+			switch (responseCode) {
+				case 200:
+				case 201:
+					BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(client.getInputStream()));
+					StringBuilder sb = new StringBuilder();
+					String line;
+					while ((line = bufferedReader.readLine()) != null) {
+						sb.append(line + "\n");
+					}
+					bufferedReader.close();
+					Log.i("startRecovery", "Response: " + sb.toString());
+					sessionGUID = sb.toString();
+			}
+		} catch (MalformedURLException e) {
+			Log.e("HTTP Client", "Error in http connection" + e.toString());
+			e.printStackTrace();
+		} catch (IOException e) {
+			Log.e("HTTP Client", "Error in http connection" + e.toString());
+			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e("HTTP Client", "Error in http connection" + e.toString());
+			e.printStackTrace();
+		}
+		finally {
+			if(client != null) {
+				try {
+					client.disconnect();
+				} catch (Exception ex) {
+					Log.e("HTTP Client", "Error in http connection" + ex.toString());
+				}
+			}
+		}
+	}
+
+	private void uploadEvidenceZip(File zipFile) {
+		Log.i("uploadEvidenceZip", zipFile.getAbsolutePath());
+		try {
+			String url = uploadEndpoint + "/" + sessionGUID;
+			HashMap<String, String> headers = new HashMap<String, String>();
+			headers.put("X-SessionID", sessionToken);
+			uk.co.onefile.nomadionic.support.MultipartUtility multipart = new uk.co.onefile.nomadionic.support.MultipartUtility(url, "UTF-8", headers);
+			multipart.addFilePart("File", zipFile);
+			List<String> finish = multipart.finish();
+			Log.i("response:", finish.toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+			// currentCallbackContext.error(e.getMessage());
+		}
+		finally {
+			if (zipFile != null) {
+				Log.i("Deleting:", zipFile.toString());
+				zipFile.delete();
+			}
+		}
+	}
 }
