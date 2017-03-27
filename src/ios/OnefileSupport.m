@@ -11,6 +11,9 @@
 #define GIGABYTE                                ((uint64_t)1073741824)
 #define GIGABYTE_1000                           ((uint64_t)1000000000)
 
+//#define MAX_SINGLE_FILE_SIZE                    (40000)
+//#define MAX_ZIP_FILE_SIZE                       (40000)
+
 #define ZIP_FILENAME                            @"ZipFile%d"
 #define EVIDENCE_LOG_FILENAME                   @"evidence-log-file.log"
 
@@ -126,9 +129,7 @@ typedef enum {
 
 - (void)pluginInitialize
 {
-    NSLog(@"OnefileSupport - pluginInitialize");
     self.inUse = NO;
-
     NSArray *docpath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     self.documentPath = [docpath objectAtIndex:0];
     NSArray *cacpath = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
@@ -142,11 +143,8 @@ typedef enum {
 // ----------------------------------
 - (void)onefileSupport:(CDVInvokedUrlCommand *)command
 {
-    NSLog(@"OnefileSupport - (void)onefileSupport:(CDVInvokedUrlCommand*)command");
-
     self.zipFilename = @"database.zip";
     self.zipPath = [self.cachePath stringByAppendingPathComponent:self.zipFilename];
-
     self.command = command;
     self.callbackId = command.callbackId;
     self.options = [command argumentAtIndex:0];
@@ -187,11 +185,8 @@ typedef enum {
 
 - (void)onefileRecover:(CDVInvokedUrlCommand *)command
 {
-    NSLog(@"OnefileRecover - (void)onefileRecover:(CDVInvokedUrlCommand*)command");
-
     self.zipFilename = @"evidence.zip";
     self.zipPath = [self.cachePath stringByAppendingPathComponent:self.zipFilename];
-
     self.command = command;
     self.callbackId = command.callbackId;
     self.options = [command argumentAtIndex:0];
@@ -199,7 +194,6 @@ typedef enum {
     if ([self.options isKindOfClass:[NSNull class]]) {
         self.options = [NSDictionary dictionary];
     }
-    NSLog(@"%@", [self options]);
     self.sessionToken = [self.options objectForKey:@"sessionToken"];
     self.username = [self.options objectForKey:@"username"];
     self.password = [self.options objectForKey:@"password"];
@@ -224,7 +218,6 @@ typedef enum {
 	{
 		@"status": [NSNumber numberWithInteger:STATUS_SUCCESSFUL],
 	};
-	NSLog(@"%@", jsonResult);
 	[self pluginSuccess:jsonResult];
 }
 
@@ -366,7 +359,6 @@ uint64_t logMemUsage(void) {
             @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
             @"headers": [httpResponse allHeaderFields]
         };
-        NSLog(@"%@", jSON);
         [self pluginSuccess:jSON];
     }
 }
@@ -398,7 +390,6 @@ uint64_t logMemUsage(void) {
             }
         }
     }
-    // NSLog(@"%@", self.paths);
 }
 
 -(void)createLogFile:(NSData *)fileContents
@@ -514,8 +505,6 @@ uint64_t logMemUsage(void) {
                                                        options: NSJSONWritingPrettyPrinted
                                                          error: &error];
     NSString *jSON = [[NSString alloc] initWithData: jsonData encoding: NSUTF8StringEncoding];
-    NSLog(@"createEvidenceLog");
-    NSLog(@"%@", jSON);
     return jsonData;
 }
 
@@ -523,8 +512,6 @@ uint64_t logMemUsage(void) {
 {
     NSError *error;
     if([self.paths count] > 0) {
-        NSLog(@"%@", self.zipPath);
-        NSLog(@"%@", self.paths);
         BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
         if(fileExists) {
             BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
@@ -551,10 +538,8 @@ uint64_t logMemUsage(void) {
     if(jSON) {
         NSError *error;
         NSArray *jsonArray = [[NSJSONSerialization JSONObjectWithData:jSON options:0 error:&error] objectForKey:@"ZipFiles"];
-        NSLog(@"%llu",(unsigned long long)[jsonArray count]);
         if([jsonArray count] > 0) {
             for(NSDictionary *currentZip in jsonArray) {
-                NSLog(@"JSON Dict: %@", currentZip);
                 NSString *zipPath = [self.documentPath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip",[currentZip objectForKey:@"Name"]]];
                 NSMutableArray *filePaths = [[NSMutableArray alloc] init];
                 for(NSDictionary *file in [currentZip objectForKey:@"Files"]) {
@@ -574,8 +559,6 @@ uint64_t logMemUsage(void) {
                 NSInteger result = [fileArchive deflateFiles:filesToZip relativeToPath:self.documentPath usingResourceFork:NO];
                 if(result > 0) {
                     unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:zipPath error:nil] fileSize];
-                    NSLog(@"Size of zipped up file: %llu", fileSize);
-                    NSLog(@"%@", zipPath);
                     [self uploadEvidenceZip: zipPath filename: [NSString stringWithFormat:@"%@.zip",[currentZip objectForKey:@"Name"]]];
                 }
                 else
@@ -604,7 +587,6 @@ uint64_t logMemUsage(void) {
 
 - (void)startRecovery:(NSData *)jSON
 {
-    NSLog(@"startRecovery");
     NSURLResponse *response;
     NSError *error;
     NSURL *url = [NSURL URLWithString:self.startEndpoint];
@@ -625,16 +607,13 @@ uint64_t logMemUsage(void) {
     // Process Response
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
     if ([response respondsToSelector:@selector(allHeaderFields)]) {
-        NSLog(@"%@", response);
         NSDictionary *jSONResponse = @
         {
             @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
             @"headers": [httpResponse allHeaderFields]
         };
-        NSLog(@"%@", jSONResponse);
         if(responseBody) {
             self.sessionGUID = [[NSString alloc] initWithData:responseBody encoding: NSUTF8StringEncoding];
-            NSLog(@"%@", self.sessionGUID);
         }
     }
 }
@@ -649,22 +628,18 @@ uint64_t logMemUsage(void) {
     NSString *charSet = @"UTF-8";
     NSString *webURL = [self.uploadEndpoint stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
     NSString *fullURL = [webURL stringByAppendingString: [NSString stringWithFormat:@"/%@", self.sessionGUID]];
-    NSLog(@"%@", fullURL);
     NSURL *url = [NSURL URLWithString: fullURL relativeToURL: nil];
     
     NSString *boundary = [NSString stringWithFormat: @"++++%9.0f++++", [NSDate timeIntervalSinceReferenceDate]];
     NSMutableData *body = [NSMutableData data];
-    
     [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", filename] dataUsingEncoding:NSUTF8StringEncoding]];
-    
     [body appendData:[NSData dataWithData: zipData]];
     [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     
     NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
     NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
     
-    // Create Request
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
     [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
     [request setHTTPMethod:@"POST"];
@@ -673,10 +648,7 @@ uint64_t logMemUsage(void) {
     [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
     [request setHTTPBody:body];
     
-    // Send Request
     [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
-    
-    // Process Response
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
     if ([response respondsToSelector:@selector(allHeaderFields)]) {
         NSDictionary *jSON = @
@@ -684,7 +656,6 @@ uint64_t logMemUsage(void) {
             @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
             @"headers": [httpResponse allHeaderFields]
         };
-        NSLog(@"%@", jSON);
     }
 }
 @end
