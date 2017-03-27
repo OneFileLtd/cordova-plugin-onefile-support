@@ -11,9 +11,6 @@
 #define GIGABYTE                                ((uint64_t)1073741824)
 #define GIGABYTE_1000                           ((uint64_t)1000000000)
 
-#define MAX_SINGLE_FILE_SIZE                    (610000)
-#define MAX_ZIP_FILE_SIZE                       (610000)
-
 #define ZIP_FILENAME                            @"ZipFile%d"
 #define EVIDENCE_LOG_FILENAME                   @"evidence-log-file.log"
 
@@ -22,6 +19,9 @@
 #define eNOT_ENOUGH_DISK_SPACE                  @"Not enough space"
 #define eCANT_DELETE_TEMPORARY_FILE             @"error deleting temporary log file!! "
 #define eFILE_DOESNT_EXIST                      @"file doesn't exist"
+#define eMAX_FILE_SIZE                          @"No valid max file size provided"
+#define eMAX_ZIP_FILES                          @"No valid max zip file size"
+
 typedef enum {
     SUPPORT_ERROR = 0,
 } SUPPORT_ERRORS;
@@ -40,7 +40,7 @@ typedef enum {
 
 	NSString *_username;
 	NSString *_password;
-	NSString *_selectedServerId;
+	NSString *_selectedServer;
 
     NSString *_ticketDescription;
     NSString *_ticketNumber;
@@ -60,6 +60,9 @@ typedef enum {
     NSString *_authEndpoint;
     NSString *_startEndpoint;
     NSString *_uploadEndpoint;
+    NSString *sessionGUID;
+    NSString *_maxFileSize;
+    NSString *_maxZipFiles;
 }
 
 @property (nonatomic, retain) NSURLConnection *uploadConnection;
@@ -69,7 +72,7 @@ typedef enum {
 
 @property (nonatomic, retain) NSString *username;
 @property (nonatomic, retain) NSString *password;
-@property (nonatomic, retain) NSString *selectedServerId;
+@property (nonatomic, retain) NSString *selectedServer;
 
 @property (nonatomic, retain) NSString *ticketDescription;
 @property (nonatomic, retain) NSString *ticketNumber;
@@ -89,7 +92,9 @@ typedef enum {
 @property (nonatomic, retain) NSString *authEndpoint;
 @property (nonatomic, retain) NSString *startEndpoint;
 @property (nonatomic, retain) NSString *uploadEndpoint;
-
+@property (nonatomic, retain) NSString *sessionGUID;
+@property (nonatomic, retain) NSString *maxFileSize;
+@property (nonatomic, retain) NSString *maxZipFiles;
 
 -(uint64_t)getFreeDiskspace;
 -(uint64_t)getDiskspace;
@@ -115,6 +120,9 @@ typedef enum {
 @synthesize authEndpoint = _authEndpoint;
 @synthesize startEndpoint = _startEndpoint;
 @synthesize uploadEndpoint = _uploadEndpoint;
+@synthesize sessionGUID = sessionGUID;
+@synthesize maxFileSize = _maxFileSize;
+@synthesize maxZipFiles = _maxZipFiles;
 
 - (void)pluginInitialize
 {
@@ -191,24 +199,26 @@ typedef enum {
     if ([self.options isKindOfClass:[NSNull class]]) {
         self.options = [NSDictionary dictionary];
     }
-
+    NSLog(@"%@", [self options]);
+    self.sessionToken = [self.options objectForKey:@"sessionToken"];
     self.username = [self.options objectForKey:@"username"];
     self.password = [self.options objectForKey:@"password"];
     self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
-    self.selectedServerId = [self.options objectForKey:@"selectedServerId"];
-    self.startEndpoint = [self.options objectForKey:@"startEndpoint"];
-    self.uploadEndpoint = [self.options objectForKey:@"uploadEndpoint"];
+    self.selectedServer = [self.options objectForKey:@"selectedServer"];
+    self.authEndpoint = [self.options objectForKey:@"authEndpoint"];
+    self.startEndpoint = [self.options objectForKey:@"endpoint"];
+    self.uploadEndpoint = [self.options objectForKey:@"endpoint"];
+    self.maxFileSize = [self.options objectForKey:@"maxFileSize"];
+    self.maxZipFiles = [self.options objectForKey:@"maxZipFiles"];
+
     if(!self.ticketNumber)
         self.ticketNumber = @"";
 
     NSData *jSONData = [self createEvidenceLog];
     [self createLogFile: jSONData];
-    [self zipFilesFromEvidenceLog: jSONData];
-
     
-    [self authRecovery];
     [self startRecovery: jSONData];
-    [self uploadRecovery: jSONData];
+    [self zipFilesFromEvidenceLog: jSONData];
     
 	NSDictionary *jsonResult = @
 	{
@@ -297,6 +307,74 @@ uint64_t logMemUsage(void) {
     [self.commandDelegate sendPluginResult:result callbackId:self.callbackId];
 }
 
+// -------------------------
+// -- SUPPORT PLUGIN CODE --
+// -------------------------
+- (void)uploadSupport
+{
+    NSURLResponse *response;
+    NSError *error;
+    
+    NSData *zipData = [[NSFileManager defaultManager] contentsAtPath: self.zipPath];
+    
+    NSString *charSet = @"UTF-8";
+    NSURL *url = [NSURL URLWithString:self.endpoint];
+    NSString *boundary = [NSString stringWithFormat: @"++++%9.0f++++", [NSDate timeIntervalSinceReferenceDate]];
+    NSMutableData *body = [NSMutableData data];
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"Device\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.device] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"TicketDescription\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.ticketDescription] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"TicketID\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.ticketNumber] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"ContactDetails\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.contactDetails] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[NSData dataWithData: zipData]];
+    [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
+    NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
+    
+    // Create Request
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
+    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
+    [request setHTTPMethod:@"POST"];
+    [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
+    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
+    [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
+    [request setHTTPBody:body];
+    
+    // Send Request
+    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    
+    // Process Response
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+    if ([response respondsToSelector:@selector(allHeaderFields)]) {
+        NSDictionary *jSON = @
+        {
+            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
+            @"headers": [httpResponse allHeaderFields]
+        };
+        NSLog(@"%@", jSON);
+        [self pluginSuccess:jSON];
+    }
+}
+
+
+// --------------------------
+// -- RECOVERY PLUGIN CODE --
+// --------------------------
 -(void)fetchDatabasePaths
 {
     if(self.paths)
@@ -320,7 +398,7 @@ uint64_t logMemUsage(void) {
             }
         }
     }
-    NSLog(@"%@", self.paths);
+    // NSLog(@"%@", self.paths);
 }
 
 -(void)createLogFile:(NSData *)fileContents
@@ -345,6 +423,9 @@ uint64_t logMemUsage(void) {
 
 -(NSData *)createEvidenceLog
 {
+    long long maxFileSize = [self.maxFileSize longLongValue];
+    long long maxZipFiles = [self.maxZipFiles longLongValue];
+    
     uint64_t space = [self getDiskspace];
     if(space < REQUIRED_DISK_SPACE) {
         [self pluginError: eNOT_ENOUGH_DISK_SPACE];
@@ -378,7 +459,7 @@ uint64_t logMemUsage(void) {
         unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:fullPath error:nil] fileSize];
     
         if(fileExists) {
-            inzipfile = (fileSize > 0 && fileSize <= MAX_SINGLE_FILE_SIZE);
+            inzipfile = (fileSize > 0 && fileSize <= maxFileSize);
             NSDictionary *file = @{
                                    @"FullPath" : fullPath,
                                    @"Path" : filePath,
@@ -387,7 +468,7 @@ uint64_t logMemUsage(void) {
                                    @"InZipFile" : [NSNumber numberWithBool: inzipfile]
                                    };
             if(inzipfile) {
-                if((currentZipSize + fileSize) > MAX_ZIP_FILE_SIZE) {
+                if((currentZipSize + fileSize) > maxZipFiles) {
                     NSDictionary *zipFile = @{
                                            @"Name" : [NSString stringWithFormat: ZIP_FILENAME, zipFileIndex],
                                            @"Size" : [NSNumber numberWithUnsignedInteger: currentZipSize],
@@ -433,8 +514,37 @@ uint64_t logMemUsage(void) {
                                                        options: NSJSONWritingPrettyPrinted
                                                          error: &error];
     NSString *jSON = [[NSString alloc] initWithData: jsonData encoding: NSUTF8StringEncoding];
+    NSLog(@"createEvidenceLog");
     NSLog(@"%@", jSON);
     return jsonData;
+}
+
+-(void)zipFiles
+{
+    NSError *error;
+    if([self.paths count] > 0) {
+        NSLog(@"%@", self.zipPath);
+        NSLog(@"%@", self.paths);
+        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
+        if(fileExists) {
+            BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
+            if(!success)
+            {
+                [self pluginError:@"error deleting temporary file!! "];
+                return;
+            }
+        }
+        ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
+        NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:self.libraryPath usingResourceFork:NO];
+        if(result > 0) {
+            [self uploadSupport];
+        }
+        else
+        [self pluginError:@"error during compression!! "];
+    }
+    else {
+        [self pluginError:@"no databases found!! "];
+    }
 }
 
 - (void)zipFilesFromEvidenceLog:(NSData *)jSON {
@@ -465,7 +575,8 @@ uint64_t logMemUsage(void) {
                 if(result > 0) {
                     unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:zipPath error:nil] fileSize];
                     NSLog(@"Size of zipped up file: %llu", fileSize);
-                    [self uploadEvidenceZip];
+                    NSLog(@"%@", zipPath);
+                    [self uploadEvidenceZip: zipPath filename: [NSString stringWithFormat:@"%@.zip",[currentZip objectForKey:@"Name"]]];
                 }
                 else
                 {
@@ -477,136 +588,26 @@ uint64_t logMemUsage(void) {
     }
 }
 
--(void)zipFiles
+-(void)deleteZipFile: (NSString *)zipPath
 {
     NSError *error;
-    if([self.paths count] > 0) {
-        NSLog(@"%@", self.zipPath);
-        NSLog(@"%@", self.paths);
-        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
-        if(fileExists) {
-            BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
-            if(!success)
-            {
-                [self pluginError:@"error deleting temporary file!! "];
-                return;
-            }
-        }
-        ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
-        NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:self.libraryPath usingResourceFork:NO];
-        if(result > 0) {
-            [self uploadSupport];
-        }
-        else
-            [self pluginError:@"error during compression!! "];
-    }
-    else {
-        [self pluginError:@"no databases found!! "];
-    }
-}
-
-- (void)uploadEvidenceZip
-{
-}
-
-- (void)uploadSupport
-{
-    NSURLResponse *response;
-    NSError *error;
-
-    NSData *zipData = [[NSFileManager defaultManager] contentsAtPath: self.zipPath];
-
-    NSString *charSet = @"UTF-8";
-    NSURL *url = [NSURL URLWithString:self.endpoint];
-    NSString *boundary = [NSString stringWithFormat: @"++++%9.0f++++", [NSDate timeIntervalSinceReferenceDate]];
-    NSMutableData *body = [NSMutableData data];
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"Device\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.device] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"TicketDescription\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.ticketDescription] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"TicketID\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.ticketNumber] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"ContactDetails\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.contactDetails] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body appendData:[NSData dataWithData: zipData]];
-    [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-
-    NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
-    NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
-
-    // Create Request
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
-    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
-    [request setHTTPMethod:@"POST"];
-    [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
-    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
-    [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
-    [request setHTTPBody:body];
-
-    // Send Request
-    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
-
-    // Process Response
-    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-    if ([response respondsToSelector:@selector(allHeaderFields)]) {
-        NSDictionary *jSON = @
+    BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:zipPath];
+    if(fileExists) {
+        BOOL success = [[NSFileManager defaultManager] removeItemAtPath:zipPath error:&error];
+        if(!success)
         {
-            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
-            @"headers": [httpResponse allHeaderFields]
-        };
-        NSLog(@"%@", jSON);
-        [self pluginSuccess:jSON];
-    }
-}
-
-- (void)authRecovery
-{
-    NSURLResponse *response;
-    NSError *error;
-    NSURL *url = [NSURL URLWithString:self.authEndpoint];
-    NSMutableData *body = [[NSMutableData data] init];
-    // Create Request
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
-    [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
-    [request setHTTPMethod:@"POST"];
-    [request setValue:self.username forHTTPHeaderField:@"X-Username"];
-    [request setValue:self.password forHTTPHeaderField:@"X-Password"];
-    [request setHTTPBody:body];
-    
-    // Send Request
-    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
-    
-    // Process Response
-    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-    if ([response respondsToSelector:@selector(allHeaderFields)]) {
-        NSLog(@"%@", response);
-        NSDictionary *jSON = @
-        {
-            @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
-            @"headers": [httpResponse allHeaderFields]
-        };
-        NSLog(@"%@", jSON);
-        [self pluginSuccess:jSON];
+            [self pluginError:@"error deleting temporary file!! "];
+            return;
+        }
     }
 }
 
 - (void)startRecovery:(NSData *)jSON
 {
+    NSLog(@"startRecovery");
     NSURLResponse *response;
     NSError *error;
     NSURL *url = [NSURL URLWithString:self.startEndpoint];
-    NSString *ContentType = [NSString stringWithFormat:@"application/json;"];
     NSMutableData *body = [[NSMutableData data] initWithData:jSON];
     NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
     
@@ -614,42 +615,61 @@ uint64_t logMemUsage(void) {
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
     [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
     [request setHTTPMethod:@"POST"];
-    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
+    [request setValue:[NSString stringWithFormat:@"application/json"] forHTTPHeaderField:@"Content-Type"];
     [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
     [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
     [request setHTTPBody:body];
     
     // Send Request
-    [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
-    
+    NSData *responseBody = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
     // Process Response
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
     if ([response respondsToSelector:@selector(allHeaderFields)]) {
-        NSDictionary *jSON = @
+        NSLog(@"%@", response);
+        NSDictionary *jSONResponse = @
         {
             @"status": [NSNumber numberWithInteger:[httpResponse statusCode]],
             @"headers": [httpResponse allHeaderFields]
         };
-        NSLog(@"%@", jSON);
-        [self pluginSuccess:jSON];
+        NSLog(@"%@", jSONResponse);
+        if(responseBody) {
+            self.sessionGUID = [[NSString alloc] initWithData:responseBody encoding: NSUTF8StringEncoding];
+            NSLog(@"%@", self.sessionGUID);
+        }
     }
 }
 
-- (void)uploadRecovery:(NSData *)jSON
+- (void)uploadEvidenceZip:(NSString *)filePath filename:(NSString *)filename
 {
     NSURLResponse *response;
     NSError *error;
-    NSURL *url = [NSURL URLWithString:self.uploadEndpoint];
-    NSString *ContentType = [NSString stringWithFormat:@"application/json;"];
-    NSMutableData *body = [[NSMutableData data] initWithData:jSON];
+    
+    NSData *zipData = [[NSFileManager defaultManager] contentsAtPath: filePath];
+    
+    NSString *charSet = @"UTF-8";
+    NSString *webURL = [self.uploadEndpoint stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    NSString *fullURL = [webURL stringByAppendingString: [NSString stringWithFormat:@"/%@", self.sessionGUID]];
+    NSLog(@"%@", fullURL);
+    NSURL *url = [NSURL URLWithString: fullURL relativeToURL: nil];
+    
+    NSString *boundary = [NSString stringWithFormat: @"++++%9.0f++++", [NSDate timeIntervalSinceReferenceDate]];
+    NSMutableData *body = [NSMutableData data];
+    
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", filename] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    [body appendData:[NSData dataWithData: zipData]];
+    [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    
     NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
+    NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
     
     // Create Request
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL: url];
     [request setCachePolicy:NSURLRequestReloadIgnoringCacheData];
     [request setHTTPMethod:@"POST"];
-    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
     [request setValue:postLength forHTTPHeaderField:@"Content-Length"];
+    [request setValue:ContentType forHTTPHeaderField:@"Content-Type"];
     [request setValue:self.sessionToken forHTTPHeaderField:@"X-SessionID"];
     [request setHTTPBody:body];
     
@@ -665,7 +685,6 @@ uint64_t logMemUsage(void) {
             @"headers": [httpResponse allHeaderFields]
         };
         NSLog(@"%@", jSON);
-        [self pluginSuccess:jSON];
     }
 }
 @end
