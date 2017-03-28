@@ -38,10 +38,6 @@ Support.prototype.recover = function (config, success, error) {
 		error('Missing session');
 		return;
 	}
-	if (!config.ticketNumber) {
-		error('Missing ticket number');
-		return;
-	}
 	if (!config.maxFileSize) {
 		error('Missing max file size');
 		return;
