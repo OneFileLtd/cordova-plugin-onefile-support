@@ -40,6 +40,7 @@ public class OnefileSupport extends CordovaPlugin {
 	private static final Long MAX_SINGLE_FILE_SIZE = MAX_ZIP_SIZE;
 	private static final String ZIP_FILENAME = "ZipFile";
 	private static final String eFILE_DOESNT_EXIST = "file doesn't exist";
+	private static final String eNO_FILES_EXIST = "no recoverable files exist";
 
 	private List<File> evidenceFiles;
 	private static String rootPath;
@@ -91,13 +92,18 @@ public class OnefileSupport extends CordovaPlugin {
 			if(serverPath != null) {
 				rootPath = cordova.getActivity().getApplicationContext().getFilesDir().getPath() + "/" + serverPath;
 				JSONObject jSONData = createEvidenceLog();
-				createLogFile(jSONData);
-				startRecovery(jSONData);
-				zipFilesFromEvidenceLog(jSONData);
-				deleteTempLogFile();
-				JSONObject result = new JSONObject();
-				result.put("status", STATUS_SUCCESSFUL);
-				callbackContext.success(result);
+				if(jSONData == null) {
+					callbackContext.error(eNO_FILES_EXIST);
+				}
+				else {
+					createLogFile(jSONData);
+					startRecovery(jSONData);
+					zipFilesFromEvidenceLog(jSONData);
+					deleteTempLogFile();
+					JSONObject result = new JSONObject();
+					result.put("status", STATUS_SUCCESSFUL);
+					callbackContext.success(result);
+				}
 			}
 		} catch (JSONException e) {
 			e.printStackTrace();
@@ -418,7 +424,7 @@ public class OnefileSupport extends CordovaPlugin {
 			currentCallbackContext.error(e.getMessage());
 		}
 		finally {
-			if (zipFile != null) {
+			if (zipFile.exists()) {
 				zipFile.delete();
 			}
 		}
