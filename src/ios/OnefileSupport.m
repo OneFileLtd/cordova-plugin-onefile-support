@@ -194,6 +194,7 @@ typedef enum {
     if ([self.options isKindOfClass:[NSNull class]]) {
         self.options = [NSDictionary dictionary];
     }
+    NSLog(@"%@", self.options);
     self.sessionToken = [self.options objectForKey:@"sessionToken"];
     self.username = [self.options objectForKey:@"username"];
     self.password = [self.options objectForKey:@"password"];
@@ -450,7 +451,7 @@ uint64_t logMemUsage(void) {
         unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:fullPath error:nil] fileSize];
     
         if(fileExists) {
-            inzipfile = (fileSize > 0 && fileSize <= self.maxFileSize);
+            inzipfile = (fileSize > 0 && fileSize <= maxFileSize && zipFileIndex <= maxZipFiles);
             NSDictionary *file = @{
                                    @"FullPath" : fullPath,
                                    @"Path" : filePath,
@@ -459,7 +460,7 @@ uint64_t logMemUsage(void) {
                                    @"InZipFile" : [NSNumber numberWithBool: inzipfile]
                                    };
             if(inzipfile) {
-                if((currentZipSize + fileSize) > self.maxZipFiles) {
+                if((currentZipSize + fileSize) > maxFileSize) {
                     NSDictionary *zipFile = @{
                                            @"Name" : [NSString stringWithFormat: ZIP_FILENAME, zipFileIndex],
                                            @"Size" : [NSNumber numberWithUnsignedInteger: currentZipSize],
@@ -495,7 +496,6 @@ uint64_t logMemUsage(void) {
                                   };
         [zipFiles addObject: zipFile];
     }
-    
     NSDictionary *logFile = @{
                               @"ExcludedFiles" : excluded,
                               @"TicketID" : self.ticketNumber,
@@ -560,6 +560,7 @@ uint64_t logMemUsage(void) {
                 if(result > 0) {
                     unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:zipPath error:nil] fileSize];
                     [self uploadEvidenceZip: zipPath filename: [NSString stringWithFormat:@"%@.zip",[currentZip objectForKey:@"Name"]]];
+                    [self deleteZipFile:zipPath];
                 }
                 else
                 {
