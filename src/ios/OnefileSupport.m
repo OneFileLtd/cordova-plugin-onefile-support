@@ -450,7 +450,7 @@ uint64_t logMemUsage(void) {
         unsigned long long fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:fullPath error:nil] fileSize];
     
         if(fileExists) {
-            inzipfile = (fileSize > 0 && fileSize <= maxFileSize);
+            inzipfile = (fileSize > 0 && fileSize <= self.maxFileSize);
             NSDictionary *file = @{
                                    @"FullPath" : fullPath,
                                    @"Path" : filePath,
@@ -459,7 +459,7 @@ uint64_t logMemUsage(void) {
                                    @"InZipFile" : [NSNumber numberWithBool: inzipfile]
                                    };
             if(inzipfile) {
-                if((currentZipSize + fileSize) > maxZipFiles) {
+                if((currentZipSize + fileSize) > self.maxZipFiles) {
                     NSDictionary *zipFile = @{
                                            @"Name" : [NSString stringWithFormat: ZIP_FILENAME, zipFileIndex],
                                            @"Size" : [NSNumber numberWithUnsignedInteger: currentZipSize],
@@ -498,7 +498,7 @@ uint64_t logMemUsage(void) {
     
     NSDictionary *logFile = @{
                               @"ExcludedFiles" : excluded,
-                              @"TicketNumber" : self.ticketNumber,
+                              @"TicketID" : self.ticketNumber,
                               @"ZipFiles" : zipFiles
                            };
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject: logFile
