@@ -36,8 +36,8 @@ public class OnefileSupport extends CordovaPlugin {
 	private static final int STATUS_ERROR = 0;
 	private static final int STATUS_SUCCESSFUL = 1;
 
-	private static final Long MAX_ZIP_SIZE = 285000L;
-	private static final Long MAX_SINGLE_FILE_SIZE = MAX_ZIP_SIZE;
+	private static Long maxFileSize;
+	private static Long maxZipFiles;
 	private static final String ZIP_FILENAME = "ZipFile";
 	private static final String eFILE_DOESNT_EXIST = "file doesn't exist";
 	private static final String eNO_FILES_EXIST = "no recoverable files exist";
@@ -89,6 +89,8 @@ public class OnefileSupport extends CordovaPlugin {
 			uploadEndpoint = config.getString("endpoint");
 			ticketNumber = config.getString("ticketNumber");
 			String serverPath = config.getString("selectedServer");
+			maxFileSize =  Long.parseLong(config.getString("maxFileSize"));
+			maxZipFiles = Long.parseLong(config.getString("maxZipFiles"));
 			if(serverPath != null) {
 				rootPath = cordova.getActivity().getApplicationContext().getFilesDir().getPath() + "/" + serverPath;
 				JSONObject jSONData = createEvidenceLog();
@@ -232,7 +234,7 @@ public class OnefileSupport extends CordovaPlugin {
 				do {
 					File fileObj = evidenceFiles.get(currentFile);
 					Long fileSize = fileObj.length();
-					boolean inzipfile = (fileSize > 0 && fileSize <= MAX_SINGLE_FILE_SIZE);
+					boolean inzipfile = (fileSize > 0L && fileSize <= maxFileSize && zipFileIndex <= maxZipFiles);
 					if (fileObj.exists()) {
 
 						int position = fileObj.getAbsolutePath().indexOf("/files/") + 7;
@@ -245,7 +247,7 @@ public class OnefileSupport extends CordovaPlugin {
 							file.put("InZipFile", inzipfile);
 
 						if (inzipfile) {
-							if ((currentZipSize + fileSize) > MAX_ZIP_SIZE) {
+							if ((currentZipSize + fileSize) > maxFileSize) {
 								JSONObject zipFile = new JSONObject();
 								zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
 								zipFile.put("Size", currentZipSize);
