@@ -37,6 +37,7 @@
 			<merges target="" />
 		</js-module>
 		<framework src="src/windows/ZipUtil.winmd" custom="true"/>
+		<resource-file src="src/windows/ZipUtil.pri" target="ZipUtil.pri" device-target="windows"  />
 	</platform>
 
 	<platform name="android">
