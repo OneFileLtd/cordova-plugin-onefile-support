@@ -93,15 +93,15 @@
 			.done(success, error);
 	}
 
-	function startDR(fileLog) {
-		var uri = new Windows.Foundation.Uri(config.endpoint);
+	function startDR(fLog) {
+	    var config = this.config;
+	    var uri = new Windows.Foundation.Uri(config.endpoint);
 		var httpClient = new Windows.Web.Http.HttpClient();
-		var config = this.config;
 		httpClient.defaultRequestHeaders.clear();
 		httpClient.defaultRequestHeaders.insert('X-SessionID', config.sessionToken);
 		httpClient.defaultRequestHeaders.accept.clear();
 		httpClient.defaultRequestHeaders.accept.insertAt(0, new Windows.Web.Http.Headers.HttpMediaTypeWithQualityHeaderValue('application/json'));
-		var fileLog = createServerFileLog(fileLog).bind({ config: config });
+		var fileLog = createServerFileLog.bind({ config: config })(fLog);
 		return httpClient.postAsync(
 			uri,
 			new Windows.Web.Http.HttpStringContent(
@@ -273,5 +273,17 @@
 	}
 
 	// To run this from the solution, comment out the line below
-	require("cordova/exec/proxy").add("OnefileSupport", OnefileSupportProxy);
+    // require("cordova/exec/proxy").add("OnefileSupport", OnefileSupportProxy);
+	OnefileSupportProxy.onefileRecover(function s() {
+	    console.log('success');
+	}, function e(err) {
+	    console.log(err);
+	}, [{
+	    endpoint: "https://wsapiuat2.onefile.co.uk/api/v2/Mobile/DisasterRecovery",
+	    sessionToken: "sQcK6f18oqcakBHSzFhimmNhyP4/DBcxYL0ZvuouuCtNRyku+iZS13ZG5HCJoQOjooa9E3uN1Br+e/EKeRmDrKN7jU2bDCONzqo4SAjw5dVUPU/zrFW9ZYaZJ7y13Lke0JcLN0v87Yu//eau3zNLmIv79UFS4GJ3X2qpEawd/MwGcLGVFQEjyL4+2N1MH8LvqTXkhFl3XE6TJ01m4zJJA2HmRLI4YlemVWWt63O0oe3SqVFPKHl7YFyIFLG/fewH1XTDjdw+u2HSrxN07HBhjiqFSkeKoJv12Xzz2BEqRblPOZy0+j76LK2OxWO7ZgrIHva5RaTVC6KCilQ9pTuPnA==",
+	    maxFileSize: 104857600,
+	    maxZipFiles: 10,
+	    selectedServer: 6,
+        ticketNumber: "123456789 d"
+	}]);
 })();
