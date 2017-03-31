@@ -302,7 +302,8 @@ public class OnefileSupport extends CordovaPlugin {
 					for (int i = 0; i < zipFiles.length(); i++) {
 						JSONObject currentZip = zipFiles.getJSONObject(i);
 						String zipPath = currentZip.get("Name").toString();
-						File zipFile = new File(TEST_DIRECTORY, zipPath + ".zip");
+						File cacheDir = this.cordova.getActivity().getApplicationContext().getCacheDir();
+						File zipFile = new File(cacheDir, zipPath + ".zip");
 						FileOutputStream dest = new FileOutputStream(zipFile);
 						ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
 
