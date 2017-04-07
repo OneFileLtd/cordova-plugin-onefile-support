@@ -36,9 +36,7 @@
 		<js-module src="src/windows/ZipFile/ZipFile/js/OnefileSupport.js" name="OnefileSupportProxy">
 			<merges target="" />
 		</js-module>
-		<framework src="src/windows/x64/ZipUtil.winmd" custom="true" arch="x64"/>
-		<framework src="src/windows/x86/ZipUtil.winmd" custom="true" arch="x86"/>
-		<framework src="src/windows/ARM/ZipUtil.winmd" custom="true" arch="ARM"/>
+		<framework src="src/windows/AnyCpu/ZipUtil.winmd" custom="true" />
 	</platform>
 
 	<platform name="android">

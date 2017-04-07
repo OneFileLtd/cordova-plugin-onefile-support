@@ -113,7 +113,7 @@
 				return response.content.readAsStringAsync()
 					.then(function readResponse(body) {
 						return {
-							fileLog: fileLog,
+							fileLog: fLog,
 							drCode: body
 						};
 					});
