@@ -45,7 +45,8 @@ public class OnefileSupport extends CordovaPlugin {
 	private static final String ZIP_FILENAME = "ZipFile";
 	private static final String eFILE_DOESNT_EXIST = "file doesn't exist";
 	private static final String eNO_FILES_EXIST = "no recoverable files exist";
-
+	private static final String eNOT_ENOUGH_MEMORY = "Not enough memory to perform this task";
+	private static final String eNOT_ENOUGH_RESOURCES = "Not enough resources to perform this task";
 	private List<File> evidenceFiles;
 	private static String rootPath;
 	private CallbackContext currentCallbackContext;
@@ -90,7 +91,6 @@ public class OnefileSupport extends CordovaPlugin {
 		currentCallbackContext = callbackContext;
 		errorOccurred = false;
 		try {
-			Log.i("OneFileSupportPlugin", config.toString(2));
 			sessionToken = config.getString("sessionToken");
 			startEndpoint = config.getString("endpoint");
 			uploadEndpoint = config.getString("endpoint");
@@ -105,12 +105,17 @@ public class OnefileSupport extends CordovaPlugin {
 					callbackContext.error(eNO_FILES_EXIST);
 				} else {
 					createLogFile(jSONData);
-					startRecovery(jSONData);
-					zipFilesFromEvidenceLog(jSONData);
-					deleteTempLogFile();
-					JSONObject result = new JSONObject();
-					result.put("status", STATUS_SUCCESSFUL);
-					callbackContext.success(result);
+					int responseCode = startRecovery(jSONData);
+					if (responseCode >= 200 && responseCode < 300)
+					{
+						zipFilesFromEvidenceLog(jSONData);
+						deleteTempLogFile();
+						JSONObject result = new JSONObject();
+						result.put("status", STATUS_SUCCESSFUL);
+						callbackContext.success(result);
+					} else {
+						callbackContext.error("Failed with error code: " + responseCode);
+					}
 				}
 			}
 		} catch (JSONException e) {
@@ -163,12 +168,12 @@ public class OnefileSupport extends CordovaPlugin {
 		} catch (OutOfMemoryError e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				callbackContext.error("Not enough memory to perform this task");
+				callbackContext.error(eNOT_ENOUGH_MEMORY);
 			}
 		} catch (Surface.OutOfResourcesException e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				callbackContext.error("Not enough memory to perform this task");
+				callbackContext.error(eNOT_ENOUGH_RESOURCES);
 			}
 		} finally {
 			if (zipFile != null) {
@@ -195,6 +200,7 @@ public class OnefileSupport extends CordovaPlugin {
 			origin.close();
 		}
 		out.close();
+		dest.close();
 	}
 
 	/* Disaster recovery methods */
@@ -206,19 +212,32 @@ public class OnefileSupport extends CordovaPlugin {
 	}
 
 	private List<File> getListFiles(File parentDir) {
-		ArrayList<File> inFiles = new ArrayList<File>();
-		File[] files = parentDir.listFiles();
-		for (File file : files) {
-			if (file.isDirectory()) {
-				inFiles.addAll(getListFiles(file));
-			} else {
-				inFiles.add(file);
-			}
+		if(errorOccurred) {
+			return null;
 		}
-		return inFiles;
+		try {
+			ArrayList<File> inFiles = new ArrayList<File>();
+			File[] files = parentDir.listFiles();
+			if (files != null && files.length > 0) {
+				for (File file : files) {
+					if (file.isDirectory()) {
+						inFiles.addAll(getListFiles(file));
+					} else {
+						inFiles.add(file);
+					}
+				}
+			}
+			return inFiles;
+		} catch (NullPointerException e) {
+			errorOccurred = true;
+			return null;
+		}
 	}
 
 	public void createLogFile(JSONObject jSON) {
+		if(errorOccurred) {
+			return;
+		}
 		try {
 			String sBody = jSON.toString();
 			String dataPath = cordova.getActivity().getApplicationContext().getFilesDir().getPath();
@@ -233,17 +252,20 @@ public class OnefileSupport extends CordovaPlugin {
 		} catch (OutOfMemoryError e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_MEMORY);
 			}
 		} catch (Surface.OutOfResourcesException e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_RESOURCES);
 			}
 		}
 	}
 
 	public JSONObject createEvidenceLog() {
+		if(errorOccurred) {
+			return null;
+		}
 		try {
 			JSONArray zipFiles = new JSONArray();
 			JSONArray files = new JSONArray();
@@ -254,67 +276,102 @@ public class OnefileSupport extends CordovaPlugin {
 			Long numberOfFilesInZip = 0L;
 			int currentFile = 0;
 			getEvidenceFiles();
+			if (evidenceFiles != null) {
+				int numberOfFiles = evidenceFiles.size();
+				if (numberOfFiles > 0) {
+					do {
+						File fileObj = evidenceFiles.get(currentFile);
+						Long fileSize = fileObj.length();
+						boolean inzipfile = (fileSize > 0L && fileSize <= maxFileSize && zipFileIndex <= maxZipFiles);
+						if (fileObj.exists()) {
 
-			int numberOfFiles = evidenceFiles.size();
-			if (numberOfFiles > 0) {
-				do {
-					File fileObj = evidenceFiles.get(currentFile);
-					Long fileSize = fileObj.length();
-					boolean inzipfile = (fileSize > 0L && fileSize <= maxFileSize && zipFileIndex <= maxZipFiles);
-					if (fileObj.exists()) {
+							int position = fileObj.getAbsolutePath().indexOf("/files/") + 7;
+							JSONObject file = new JSONObject();
+							file.put("FullPath", fileObj.getAbsolutePath());
+							file.put("Path", fileObj.getAbsolutePath().substring(position));
+							file.put("Name", fileObj.getName());
+							file.put("Size", fileSize);
+							if (inzipfile)
+								file.put("InZipFile", inzipfile);
 
-						int position = fileObj.getAbsolutePath().indexOf("/files/") + 7;
-						JSONObject file = new JSONObject();
-						file.put("FullPath", fileObj.getAbsolutePath());
-						file.put("Path", fileObj.getAbsolutePath().substring(position));
-						file.put("Name", fileObj.getName());
-						file.put("Size", fileSize);
-						if (inzipfile)
-							file.put("InZipFile", inzipfile);
-
-						if (inzipfile) {
-							if ((currentZipSize + fileSize) > maxFileSize) {
-								JSONObject zipFile = new JSONObject();
-								zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
-								zipFile.put("Size", currentZipSize);
-								zipFile.put("Files", files);
-								zipFile.put("Count", numberOfFilesInZip);
-								zipFiles.put(zipFile);
-								zipFileIndex++;
-								currentZipSize = 0L;
-								numberOfFilesInZip = 0L;
-								files = new JSONArray();
+							if (inzipfile) {
+								if ((currentZipSize + fileSize) > maxFileSize) {
+									JSONObject zipFile = new JSONObject();
+									zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
+									zipFile.put("Size", currentZipSize);
+									zipFile.put("Files", files);
+									zipFile.put("Count", numberOfFilesInZip);
+									zipFiles.put(zipFile);
+									zipFileIndex++;
+									currentZipSize = 0L;
+									numberOfFilesInZip = 0L;
+									files = new JSONArray();
+								}
+								files.put(file);
+								numberOfFilesInZip++;
+								currentZipSize += fileSize;
+							} else {
+								excluded.put(file);
 							}
-							files.put(file);
-							numberOfFilesInZip++;
-							currentZipSize += fileSize;
 						} else {
-							excluded.put(file);
+							currentCallbackContext.error(eFILE_DOESNT_EXIST);
 						}
-					} else {
-						currentCallbackContext.error(eFILE_DOESNT_EXIST);
+						currentFile++;
+					} while (currentFile < numberOfFiles);
+					if (files.length() > 0) {
+						JSONObject zipFile = new JSONObject();
+						zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
+						zipFile.put("Size", currentZipSize);
+						zipFile.put("Files", files);
+						zipFile.put("Count", numberOfFilesInZip);
+						zipFiles.put(zipFile);
 					}
-					currentFile++;
-				} while (currentFile < numberOfFiles);
-				if (files.length() > 0) {
-					JSONObject zipFile = new JSONObject();
-					zipFile.put("Name", ZIP_FILENAME + zipFileIndex);
-					zipFile.put("Size", currentZipSize);
-					zipFile.put("Files", files);
-					zipFile.put("Count", numberOfFilesInZip);
-					zipFiles.put(zipFile);
+					JSONObject logFile = new JSONObject();
+					logFile.put("ZipFiles", zipFiles);
+					logFile.put("ExcludedFiles", excluded);
+					logFile.put("TicketID", ticketNumber);
+					return logFile;
 				}
-				JSONObject logFile = new JSONObject();
-				logFile.put("ZipFiles", zipFiles);
-				logFile.put("ExcludedFiles", excluded);
-				logFile.put("TicketID", ticketNumber);
-				return logFile;
 			}
 			return null;
 		} catch (JSONException e) {
 			e.printStackTrace();
 			currentCallbackContext.error(e.getMessage());
 		}  catch (OutOfMemoryError e) {
+			if(!errorOccurred) {
+				errorOccurred = true;
+				currentCallbackContext.error(eNOT_ENOUGH_MEMORY);
+			}
+		} catch (Surface.OutOfResourcesException e) {
+			if(!errorOccurred) {
+				errorOccurred = true;
+				currentCallbackContext.error(eNOT_ENOUGH_RESOURCES);
+			}
+		}
+		return null;
+	}
+
+	public void zipFilesFromEvidenceLog(JSONObject jSON) {
+		try {
+			if (jSON != null) {
+				JSONArray zipFiles = jSON.getJSONArray("ZipFiles");
+				if (zipFiles.length() > 0) {
+					File cacheDir = this.cordova.getActivity().getApplicationContext().getCacheDir();
+					int length = zipFiles.length();
+					for (int i = 0; i < length; i++) {
+						JSONObject currentZip = zipFiles.getJSONObject(i);
+						String zipPath = currentZip.get("Name").toString();
+						File zipFile = new File(cacheDir, zipPath + ".zip");
+						filesToZip(currentZip.getJSONArray("Files"), zipFile);
+						// TODO: Crashes during uploadEvidenceZip, on large files.
+						uploadEvidenceZip(zipFile);
+					}
+				}
+			}
+		} catch (JSONException e) {
+			e.printStackTrace();
+			currentCallbackContext.error(e.getMessage());
+		} catch (OutOfMemoryError e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
 				currentCallbackContext.error("Not enough memory to perform this task");
@@ -325,47 +382,27 @@ public class OnefileSupport extends CordovaPlugin {
 				currentCallbackContext.error("Not enough memory to perform this task");
 			}
 		}
-		return null;
 	}
-
-	public void zipFilesFromEvidenceLog(JSONObject jSON) {
+	private void filesToZip(JSONArray files, File zipFile) {
 		try {
-			getFreeMemory();
-			if (jSON != null) {
-				JSONArray zipFiles = jSON.getJSONArray("ZipFiles");
-				if (zipFiles.length() > 0) {
-					BufferedInputStream origin = null;
-					for (int i = 0; i < zipFiles.length(); i++) {
-						JSONObject currentZip = zipFiles.getJSONObject(i);
-						String zipPath = currentZip.get("Name").toString();
-						File cacheDir = this.cordova.getActivity().getApplicationContext().getCacheDir();
-						File zipFile = new File(cacheDir, zipPath + ".zip");
-						FileOutputStream dest = new FileOutputStream(zipFile);
-						ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
-
-						JSONArray files = currentZip.getJSONArray("Files");
-						for (int f = 0; f < files.length(); f++) {
-							JSONObject file = files.getJSONObject(f);
-							String path = file.get("FullPath").toString();
-							File evidenceFile = new File(path);
-							FileInputStream evidenceStream = new FileInputStream(evidenceFile);
-
-							byte data[] = new byte[BUFFER];
-							origin = new BufferedInputStream(evidenceStream, BUFFER);
-							int position = evidenceFile.getAbsolutePath().indexOf("/files/") + 7;
-							ZipEntry entry = new ZipEntry(evidenceFile.getAbsolutePath().substring(position));
-							out.putNextEntry(entry);
-							int count;
-							while ((count = origin.read(data, 0, BUFFER)) != -1) {
-								out.write(data, 0, count);
-							}
-							origin.close();
-						}
-						out.close();
-						uploadEvidenceZip(zipFile);
-					}
+			int length = files.length();
+			FileOutputStream dest = new FileOutputStream(zipFile);
+			ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(dest));
+			byte data[] = new byte[BUFFER];
+			for (int f = 0; f < length; f++) {
+				File evidenceFile = new File(files.getJSONObject(f).get("FullPath").toString());
+				FileInputStream evidenceStream = new FileInputStream(evidenceFile);
+				BufferedInputStream origin = new BufferedInputStream(evidenceStream, BUFFER);
+				ZipEntry entry = new ZipEntry(evidenceFile.getAbsolutePath().substring(evidenceFile.getAbsolutePath().indexOf("/files/") + 7));
+				out.putNextEntry(entry);
+				int count;
+				while ((count = origin.read(data, 0, BUFFER)) != -1) {
+					out.write(data, 0, count);
 				}
+				origin.close();
 			}
+			out.close();
+			dest.close();
 		} catch (JSONException e) {
 			e.printStackTrace();
 			currentCallbackContext.error(e.getMessage());
@@ -375,16 +412,6 @@ public class OnefileSupport extends CordovaPlugin {
 		} catch (IOException e) {
 			e.printStackTrace();
 			currentCallbackContext.error(e.getMessage());
-		}  catch (OutOfMemoryError e) {
-			if(!errorOccurred) {
-				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
-			}
-		} catch (Surface.OutOfResourcesException e) {
-			if(!errorOccurred) {
-				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
-			}
 		}
 	}
 
@@ -400,19 +427,24 @@ public class OnefileSupport extends CordovaPlugin {
 			e.printStackTrace();
 			currentCallbackContext.error(e.getMessage());
 		}  catch (OutOfMemoryError e) {
+			e.printStackTrace();
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_MEMORY);
 			}
 		} catch (Surface.OutOfResourcesException e) {
+			e.printStackTrace();
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_RESOURCES);
 			}
 		}
 	}
 
-	private void startRecovery(JSONObject jSON) {
+	private int startRecovery(JSONObject jSON) {
+		if(errorOccurred) {
+			return 0;
+		}
 		HttpURLConnection client = null;
 		String jSONString = jSON.toString();
 		String SessionTokenString = sessionToken.toString();
@@ -445,6 +477,7 @@ public class OnefileSupport extends CordovaPlugin {
 					bufferedReader.close();
 					sessionGUID = sb.toString();
 			}
+			return responseCode;
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
 			currentCallbackContext.error(e.getMessage());
@@ -457,7 +490,7 @@ public class OnefileSupport extends CordovaPlugin {
 		}   catch (OutOfMemoryError e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_MEMORY);
 			}
 		} finally {
 			if (client != null) {
@@ -469,9 +502,13 @@ public class OnefileSupport extends CordovaPlugin {
 				}
 			}
 		}
+		return 0;
 	}
 
 	private void uploadEvidenceZip(File zipFile) {
+		if(errorOccurred) {
+			return;
+		}
 		try {
 			String url = uploadEndpoint + "/" + sessionGUID;
 			HashMap<String, String> headers = new HashMap<String, String>();
@@ -485,14 +522,14 @@ public class OnefileSupport extends CordovaPlugin {
 		}   catch (OutOfMemoryError e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_MEMORY);
 			}
 		} catch (Surface.OutOfResourcesException e) {
 			if(!errorOccurred) {
 				errorOccurred = true;
-				currentCallbackContext.error("Not enough memory to perform this task");
+				currentCallbackContext.error(eNOT_ENOUGH_RESOURCES);
 			}
-		}finally {
+		} finally {
 			if (zipFile.exists()) {
 				zipFile.delete();
 			}
@@ -500,11 +537,18 @@ public class OnefileSupport extends CordovaPlugin {
 	}
 
 	private long getFreeMemory() {
+		ActivityManager activityManager = (ActivityManager) cordova.getActivity().getApplicationContext().getSystemService(ACTIVITY_SERVICE);
+		MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
+		activityManager.getMemoryInfo(memoryInfo);
+		Log.i("OnefileSupport", "memoryInfo.availMem " + memoryInfo.availMem + "\n" );
+		Log.i("OnefileSupport", "memoryInfo.lowMemory " + memoryInfo.lowMemory + "\n" );
+		Log.i("OnefileSupport", "memoryInfo.threshold " + memoryInfo.threshold + "\n" );
+
 		final Runtime runtime = Runtime.getRuntime();
 		final long usedMemInB=(runtime.totalMemory() - runtime.freeMemory());
 		final long maxHeapSizeInB=runtime.maxMemory();
 		final long availHeapSizeInMB = maxHeapSizeInB - usedMemInB;
-		Log.i("getFreeMemory", String.valueOf(availHeapSizeInMB));
+		Log.i("OnefileSupport", "availableHeapSize:" + String.valueOf(availHeapSizeInMB));
 		return availHeapSizeInMB;
 	}
 }
