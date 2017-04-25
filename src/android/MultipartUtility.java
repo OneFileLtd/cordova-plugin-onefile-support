@@ -23,6 +23,8 @@ public class MultipartUtility {
 	private String charset;
 	private OutputStream outputStream;
 	private PrintWriter writer;
+	private static final int CHUNK_STREAM_SIZE = 4096;
+	private static final int BUFFER = 4096;
 
 	/**
 	 * This constructor initializes a new HTTP POST request with content type
@@ -43,6 +45,7 @@ public class MultipartUtility {
 		httpConn.setUseCaches(false);
 		httpConn.setDoOutput(true);    // indicates POST method
 		httpConn.setDoInput(true);
+		httpConn.setChunkedStreamingMode(CHUNK_STREAM_SIZE);
 		httpConn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 		for (Map.Entry<String, String> header : headers.entrySet()) {
 			httpConn.setRequestProperty(header.getKey(), header.getValue());
@@ -94,7 +97,7 @@ public class MultipartUtility {
 		writer.flush();
 
 		FileInputStream inputStream = new FileInputStream(uploadFile);
-		byte[] buffer = new byte[4096];
+		byte[] buffer = new byte[BUFFER];
 		int bytesRead = -1;
 		while ((bytesRead = inputStream.read(buffer)) != -1) {
 			outputStream.write(buffer, 0, bytesRead);
@@ -144,6 +147,6 @@ public class MultipartUtility {
 		} else {
 			throw new IOException("Server returned non-OK status: " + status);
 		}
-			return response;
-		}
+		return response;
 	}
+}
