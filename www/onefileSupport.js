@@ -26,10 +26,6 @@ Support.prototype.sendSupport = function (config, success, error) {
 		error('Missing files');
 		return;
 	}
-	if (config.files && config.files.length === 0) {
-		error('Missing files');
-		return;
-	}
 	exec(success, error, "OnefileSupport", "onefileSupport", [config]);
 };
 
