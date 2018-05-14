@@ -166,6 +166,7 @@ typedef enum {
     NSString *actualDiskSpace = [NSString stringWithFormat:@"%5.2f", (Float64)spaceFloat];
     NSString *freeDiskSpace = [NSString stringWithFormat:@"%5.2f", (Float64)freeFloat];
     NSString *freeMemory = [NSString stringWithFormat:@"%llu", (uint64_t)(logMemUsage)];
+    NSString *databaseAttached = [NSString stringWithFormat:@"[Database Files Attached]"];
     self.ticketDescription = [self.options objectForKey:@"ticketDescription"];
     self.ticketNumber = [self.options objectForKey:@"ticketNumber"];
     self.contactDetails = [self.options objectForKey:@"contactDetails"];
@@ -173,9 +174,11 @@ typedef enum {
     self.endpoint = [self.options objectForKey:@"endpoint"];
     NSString *deviceJS = [self.options objectForKey:@"device"];
     self.files = [self.options objectForKey:@"files"];
-
-    self.device = [NSString stringWithFormat:@"%@\n\nModel: %@\nSystem Version: %@\nVersion Number: %@\nBuild Number: %@\nActual Disk Space: %@\nFree Disk Space: %@\nFree Memory: %@",
-                   deviceJS, model, systemVersion, versionNumber, buildNumber, actualDiskSpace, freeDiskSpace, freeMemory];
+    if([self.files count] == 0) {
+        databaseAttached = [NSString stringWithFormat:@"[Database Files NOT Attached]"];
+    }
+    self.device = [NSString stringWithFormat:@"%@\n\nModel: %@\nSystem Version: %@\nVersion Number: %@\nBuild Number: %@\nActual Disk Space: %@\nFree Disk Space: %@\nFree Memory: %@\n%@",
+                   deviceJS, model, systemVersion, versionNumber, buildNumber, actualDiskSpace, freeDiskSpace, freeMemory, databaseAttached];
 
     if(!self.ticketNumber)
         self.ticketNumber = @"";
@@ -330,13 +333,13 @@ uint64_t logMemUsage(void) {
     [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"ContactDetails\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.contactDetails] dataUsingEncoding:NSUTF8StringEncoding]];
-    
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
-    
-    [body appendData:[NSData dataWithData: zipData]];
-    [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    
+    if(self.files > 0) {
+        [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+        [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
+        
+        [body appendData:[NSData dataWithData: zipData]];
+        [body appendData:[[NSString stringWithFormat:@"\r\n\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    }
     NSString *postLength = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
     NSString *ContentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@; charset=%@", boundary, charSet];
     
@@ -504,7 +507,6 @@ uint64_t logMemUsage(void) {
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject: logFile
                                                        options: NSJSONWritingPrettyPrinted
                                                          error: &error];
-    NSString *jSON = [[NSString alloc] initWithData: jsonData encoding: NSUTF8StringEncoding];
     return jsonData;
 }
 
@@ -530,7 +532,7 @@ uint64_t logMemUsage(void) {
         [self pluginError:@"error during compression!! "];
     }
     else {
-        [self pluginError:@"no databases found!! "];
+        [self uploadSupport];
     }
 }
 
