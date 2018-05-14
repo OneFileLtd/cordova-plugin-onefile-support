@@ -135,6 +135,7 @@ public class OnefileSupport extends CordovaPlugin {
 			String endpoint = config.getString("endpoint");
 			String device = config.getString("device");
 			Context context = this.cordova.getActivity().getApplicationContext();
+
 			JSONArray files = config.getJSONArray("files");
 			zipFile = File.createTempFile("tmpSupportUpload", "zip", context.getCacheDir());
 			createDatabaseZipFile(files, zipFile);
@@ -150,6 +151,11 @@ public class OnefileSupport extends CordovaPlugin {
 			device += "\nManufacturer: " + Build.MANUFACTURER;
 			device += "\nModel: " + Build.MODEL;
 			device += "\nAndroid OS Version: " + Build.VERSION.RELEASE;
+			if(files.length() > 0){
+				device += "\n\n[Database Files Attached]";
+			} else {
+				device += "\n\n[Database Files NOT Attached]";
+			}
 			multipart.addFormField("Device", device);
 			multipart.addFormField("TicketDescription", ticketDescription);
 			multipart.addFormField("TicketID", ticketNumber);
@@ -189,6 +195,14 @@ public class OnefileSupport extends CordovaPlugin {
 				out.write(data, 0, count);
 			}
 			origin.close();
+		}
+		if(files.length() == 0) {
+			ZipEntry entry = new ZipEntry("Nothing_Uploaded.txt");
+			out.putNextEntry(entry);
+			StringBuilder sb = new StringBuilder();
+			sb.append("No databases were uploaded");
+			byte[] fileContent = sb.toString().getBytes();
+			out.write(fileContent, 0, fileContent.length);
 		}
 		out.close();
 		dest.close();
