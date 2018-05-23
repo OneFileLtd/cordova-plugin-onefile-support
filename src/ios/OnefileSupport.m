@@ -333,7 +333,7 @@ uint64_t logMemUsage(void) {
     [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"ContactDetails\"\r\n\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
     [body appendData:[[NSString stringWithFormat:@"%@\r\n", self.contactDetails] dataUsingEncoding:NSUTF8StringEncoding]];
-    if(self.files > 0) {
+    if([self.files count] > 0) {
         [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
         [body appendData:[[NSString stringWithFormat:@"Content-Disposition: form-data; name=\"File\"; filename=\"%@\"\r\n\r\n", self.zipFilename] dataUsingEncoding:NSUTF8StringEncoding]];
         
@@ -513,16 +513,16 @@ uint64_t logMemUsage(void) {
 -(void)zipFiles
 {
     NSError *error;
+	BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
+	if(fileExists) {
+		BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
+		if(!success)
+		{
+			[self pluginError:@"error deleting temporary file!! "];
+			return;
+		}
+	}
     if([self.paths count] > 0) {
-        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:self.zipPath];
-        if(fileExists) {
-            BOOL success = [[NSFileManager defaultManager] removeItemAtPath:self.zipPath error:&error];
-            if(!success)
-            {
-                [self pluginError:@"error deleting temporary file!! "];
-                return;
-            }
-        }
         ZKFileArchive *fileArchive = [ZKFileArchive archiveWithArchivePath:self.zipPath];
         NSInteger result = [fileArchive deflateFiles:self.paths relativeToPath:self.libraryPath usingResourceFork:NO];
         if(result > 0) {
