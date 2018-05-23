@@ -20,12 +20,12 @@
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
 		id="cordova-plugin-onefile-support"
-		version="0.0.1">
+		version="1.2.1">
 	<name>OneFile Support Uploader</name>
 	<description>Cordova Plugin OneFile Support</description>
 	<license>Onefile Limited</license>
 	<keywords>nomad,onefile,support</keywords>
-	<repo>https://github.com/ben3005/cordova-plugin-onefile-support.git</repo>
+	<repo>https://github.com/OneFileLtd/cordova-plugin-onefile-support.git</repo>
 	<issue></issue>
 
 	<js-module src="www/onefileSupport.js" name="OnefileSupport">
