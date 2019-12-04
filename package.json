@@ -1,0 +1,22 @@
+{
+    "name": "cordova-plugin-onefile-support",
+    "version": "1.0.1",
+    "description": "Cordova Plugin Onefile Support",
+    "cordova": {
+        "id": "cordova-plugin-onefile-support",
+        "platforms": [
+            "ios",
+            "android",
+            "windows"
+        ]
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/OneFileLtd/cordova-plugin-onefile-support.git"
+    },
+    "keywords": [
+        "ecosystem:cordova"
+    ],
+    "author": "M Howarth",
+    "license": "Apache-2.0"
+}
